@@ -28,7 +28,7 @@ russh-sftp = "3.0"
 keyring = "4"
 base64 = "0.23"
 sha1 = "0.10"
-sha2 = "0.10"
+sha2 = "0.11"
 hmac = "0.12"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
