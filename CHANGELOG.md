@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Accessibility hardening: High Contrast theme (WCAG AAA contrast, covered by
+  tests), axe-core audit in the WebDriver CI job (gates on critical/serious
+  violations), focus trap in dialogs, table semantics for the SFTP panes.
+- Post-quantum status badge in the status bar: shows the actual negotiated
+  key exchange (via the russh kex_done hook) — PQ (mlkem768x25519-sha256)
+  or classic, per session.
+- System tray: Open/Quit menu, left-click restores the window, and an
+  optional close-to-tray background mode (spec 26.6) for background MCP
+  server and live sessions.
+- External ~/.ssh/config change detection: a review dialog lists
+  added/removed/changed hosts against the last reviewed snapshot (18.3).
+- Broadcast paste: paste (Ctrl+Shift+V / context menu) is sent to every
+  connected terminal in broadcast mode.
+- Ctrl+T duplicates the active session in a new tab.
+- Dependency audit workflow: RustSec advisories and npm audit.
+
 ## [0.1.0] - 2026-11-02
 
 ### Added
