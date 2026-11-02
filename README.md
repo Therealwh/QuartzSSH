@@ -75,7 +75,7 @@ npm run tauri build   # сборка установщика
 
 ## 🗺 Планы
 
-- [ ] Порт-форвардинг (local / remote / dynamic SOCKS)
+- [x] Порт-форвардинг (local / remote / dynamic SOCKS)
 - [x] Панель живой статистики сервера (CPU, RAM, диск, сеть)
 - [x] Встроенный редактор кода для файлов на сервере (CodeMirror 6, атомарная запись с проверкой mtime)
 - [ ] Workspaces, split-view и broadcast-ввод

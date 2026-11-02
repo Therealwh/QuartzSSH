@@ -179,6 +179,15 @@
     "procMem": "Пам",
     "noProcesses": "Нет данных о процессах"
   },
+  "forward": {
+    "title": "Порт-форвардинг",
+    "add": "Добавить правило",
+    "remove": "Удалить",
+    "hint": "local:8080:example.com:80 — локальный; dynamic:1080 — SOCKS5; remote:3000:localhost:3000 — обратный. Слушается 127.0.0.1.",
+    "specPlaceholder": "local:8080:example.com:80",
+    "active": "Форвардов: {{count}}",
+    "failed": "Не удалось создать форвард: {{message}}"
+  },
   "settings": {
     "title": "Настройки",
     "appearance": "Оформление",

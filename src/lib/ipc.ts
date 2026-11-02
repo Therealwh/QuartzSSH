@@ -4,6 +4,8 @@ import type {
   ConnectResult,
   DirectoryListing,
   FileEntry,
+  ForwardAdded,
+  ForwardEntry,
   HostKeyDecision,
   KnownHostEntry,
   LocalListing,
@@ -97,6 +99,12 @@ export const ipc = {
   monitoringOpen: (sessionId: string) => invoke<void>("monitoring_open", { sessionId }),
   monitoringClose: (sessionId: string) => invoke<void>("monitoring_close", { sessionId }),
   monitoringIsOpen: (sessionId: string) => invoke<boolean>("monitoring_is_open", { sessionId }),
+
+  // Port forwarding
+  forwardAdd: (sessionId: string, spec: string) =>
+    invoke<ForwardAdded>("forward_add", { sessionId, spec }),
+  forwardRemove: (forwardId: string) => invoke<void>("forward_remove", { forwardId }),
+  forwardList: (sessionId: string) => invoke<ForwardEntry[]>("forward_list", { sessionId }),
 
   // Local filesystem
   localList: (path: string) => invoke<LocalListing>("local_list", { path }),

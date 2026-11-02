@@ -4,10 +4,10 @@ pub mod known_hosts;
 pub mod ssh_config;
 
 use base64::Engine;
-use russh::client::{self, Handle};
+use russh::client::{self, ChannelOpenHandle, Handle};
 use russh::keys::ssh_key;
 use russh::keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
-use russh::{ChannelMsg, Disconnect};
+use russh::{Channel, ChannelMsg, Disconnect};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -127,7 +127,21 @@ impl HostKeyGate {
 
 pub struct ClientHandler {
     gate: Arc<HostKeyGate>,
+    /// Receives `forwarded-tcpip` channels while a remote forward (`-R`) is
+    /// active; the slot stays empty otherwise.
+    pub remote_slot: RemoteForwardSlot,
 }
+
+/// A `forwarded-tcpip` channel opened by the server for one of our remote
+/// forwards; `connected_port` identifies the listening port on the server.
+pub struct ForwardedChannel {
+    pub channel: Channel<client::Msg>,
+    pub connected_port: u32,
+}
+
+/// Shared slot for the sender that receives server-opened forwarded
+/// channels; set by the forward manager when a remote forward starts.
+pub type RemoteForwardSlot = Arc<Mutex<Option<tokio::sync::mpsc::Sender<ForwardedChannel>>>>;
 
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
@@ -143,6 +157,32 @@ impl client::Handler for ClientHandler {
             }
         };
         self.gate.verify(key).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: Channel<client::Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        // Hand the channel to the forward dispatcher if one is registered;
+        // otherwise accept and drop (nobody asked for this forward).
+        let sender = self.remote_slot.lock().unwrap().as_ref().cloned();
+        reply.accept().await;
+        if let Some(sender) = sender {
+            let _ = sender
+                .send(ForwardedChannel {
+                    channel,
+                    connected_port,
+                })
+                .await;
+        }
+        Ok(())
     }
 }
 
@@ -166,6 +206,9 @@ pub struct SshSession {
     pub handle: Arc<Handle<ClientHandler>>,
     pub input_tx: tokio::sync::mpsc::Sender<SshInput>,
     pub closed: Arc<AtomicBool>,
+    /// Routing slot for server-opened `forwarded-tcpip` channels (remote
+    /// forwarding); empty unless a `-R` forward is active on this session.
+    pub remote_slot: RemoteForwardSlot,
 }
 
 #[derive(Clone, Serialize)]
@@ -298,7 +341,11 @@ pub async fn connect(
         ..Default::default()
     };
 
-    let handler = ClientHandler { gate };
+    let remote_slot: RemoteForwardSlot = Arc::new(Mutex::new(None));
+    let handler = ClientHandler {
+        gate,
+        remote_slot: remote_slot.clone(),
+    };
     let connect_fut = client::connect(Arc::new(client_config), (host.as_str(), port), handler);
     let mut session_handle = match tokio::time::timeout(Duration::from_secs(30), connect_fut).await
     {
@@ -421,6 +468,7 @@ pub async fn connect(
             handle: Arc::new(session_handle),
             input_tx,
             closed,
+            remote_slot,
         })
         .await;
 

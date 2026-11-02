@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod forward;
 mod localfs;
 mod monitoring;
 mod sftp;
@@ -37,6 +38,7 @@ pub fn run() {
             app.manage(SftpManager::default());
             app.manage(Arc::new(TransferManager::default()));
             app.manage(monitoring::MonitoringManager::default());
+            app.manage(forward::ForwardManager::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -72,6 +74,9 @@ pub fn run() {
             commands::monitoring_open,
             commands::monitoring_close,
             commands::monitoring_is_open,
+            forward::forward_add,
+            forward::forward_remove,
+            forward::forward_list,
             commands::local_list,
             commands::local_home,
             commands::local_mkdir,
