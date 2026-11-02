@@ -1,9 +1,10 @@
 import { create } from "zustand";
+import i18next from "i18next";
 import type { Profile } from "../types";
 import { ipc } from "../lib/ipc";
 import { useDialogs } from "./dialogs";
 
-export type TabKind = "terminal" | "sftp" | "settings" | "editor";
+export type TabKind = "terminal" | "sftp" | "monitoring" | "settings" | "editor";
 
 /** Remote files above this size are refused by the editor (both sides). */
 export const EDITOR_MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -55,6 +56,7 @@ interface SessionsStore {
   openSftpForProfile: (profile: Profile) => Promise<void>;
   openEditorTab: (sftpId: string, path: string) => void;
   setTabDirty: (tabId: string, dirty: boolean) => void;
+  openMonitoringTab: () => void;
   openSettingsTab: () => void;
   setActiveTab: (id: string) => void;
   closeTab: (id: string) => Promise<void>;
@@ -260,6 +262,21 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       return;
     }
     const tab: Tab = { id: "tab-settings", kind: "settings", title: "Settings" };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
+  },
+
+  /** Single-instance server health tab. */
+  openMonitoringTab: () => {
+    const existing = get().tabs.find((t) => t.kind === "monitoring");
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tab: Tab = {
+      id: "tab-monitoring",
+      kind: "monitoring",
+      title: i18next.t("activity.monitoring"),
+    };
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
   },
 

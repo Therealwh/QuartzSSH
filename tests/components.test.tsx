@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TransfersBar } from "../src/components/TransfersBar";
+import { MonitoringPanel } from "../src/components/panels/MonitoringPanel";
 import { useTransfers } from "../src/store/transfers";
 import { useDialogs } from "../src/store/dialogs";
 import { PasswordDialog } from "../src/components/dialogs/PasswordDialog";
@@ -9,6 +10,10 @@ import type { TransferEvent } from "../src/types";
 // Components under test must not touch the real IPC bridge.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => undefined),
 }));
 
 beforeEach(() => {
@@ -69,5 +74,13 @@ describe("PasswordDialog", () => {
   it("does not render when no prompt is active", () => {
     const { container } = render(<PasswordDialog />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("MonitoringPanel", () => {
+  it("shows a connect hint when there are no active sessions", () => {
+    render(<MonitoringPanel />);
+    expect(screen.getByText(/Нет активных подключений|No active connections/i)).toBeTruthy();
+    expect(screen.getByText(/Подключитесь|Connect to a server/i)).toBeTruthy();
   });
 });

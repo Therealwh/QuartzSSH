@@ -93,6 +93,11 @@ export const ipc = {
       force,
     }),
 
+  // Monitoring
+  monitoringOpen: (sessionId: string) => invoke<void>("monitoring_open", { sessionId }),
+  monitoringClose: (sessionId: string) => invoke<void>("monitoring_close", { sessionId }),
+  monitoringIsOpen: (sessionId: string) => invoke<boolean>("monitoring_is_open", { sessionId }),
+
   // Local filesystem
   localList: (path: string) => invoke<LocalListing>("local_list", { path }),
   localHome: () => invoke<string>("local_home"),
