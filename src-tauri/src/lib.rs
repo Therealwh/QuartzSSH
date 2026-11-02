@@ -12,7 +12,84 @@ use sftp::{SftpManager, TransferManager};
 use ssh::known_hosts::KnownHosts;
 use ssh::{PendingHostKeys, SshManager};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager,
+};
+
+/// Tooltip of the tray icon.
+const TRAY_TOOLTIP: &str = "QuartzSSH";
+const TRAY_OPEN_ID: &str = "quartzssh-open";
+const TRAY_QUIT_ID: &str = "quartzssh-quit";
+
+/// The backend has no access to the frontend i18n store (UI language lives in
+/// localStorage), so the tray uses neutral English labels. The matching
+/// `tray.*` keys in src/i18n/{ru,en}.json document them for the settings UI.
+const TRAY_OPEN_LABEL: &str = "Open QuartzSSH";
+const TRAY_QUIT_LABEL: &str = "Quit";
+
+/// Show (and un-minimize) the main window and give it focus. Used by the tray
+/// menu and by left clicks on the tray icon.
+fn show_main_window(window: &tauri::WebviewWindow) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+/// Build the tray icon: it is always created, both for the regular mode
+/// (quick access) and for the headless background mode (spec 26.6), where the
+/// window is closed while background MCP servers and SSH sessions keep running.
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let open = MenuItem::with_id(
+        app,
+        TRAY_OPEN_ID,
+        TRAY_OPEN_LABEL,
+        true,
+        Option::<&str>::None,
+    )?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(
+        app,
+        TRAY_QUIT_ID,
+        TRAY_QUIT_LABEL,
+        true,
+        Option::<&str>::None,
+    )?;
+    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+
+    TrayIconBuilder::new()
+        .icon(tauri::include_image!("icons/32x32.png"))
+        .tooltip(TRAY_TOOLTIP)
+        .menu(&menu)
+        // Left click restores the window; the menu opens on right click.
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| {
+            if event.id() == TRAY_OPEN_ID {
+                if let Some(window) = app.get_webview_window("main") {
+                    show_main_window(&window);
+                }
+            } else if event.id() == TRAY_QUIT_ID {
+                app.exit(0);
+            }
+        })
+        .on_tray_icon_event(|tray, event| {
+            // React on release (Up) to match the usual click semantics.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(window) = app.get_webview_window("main") {
+                    show_main_window(&window);
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -42,7 +119,25 @@ pub fn run() {
             app.manage(monitoring::MonitoringManager::default());
             app.manage(forward::ForwardManager::default());
 
+            setup_tray(app)?;
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Spec 26.6 "close to tray": when enabled, closing the window
+            // hides it instead of quitting, so the MCP server and active
+            // SSH sessions keep running in the background.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let close_to_tray = window
+                    .app_handle()
+                    .state::<SettingsStore>()
+                    .get()
+                    .close_to_tray;
+                if close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::profile_list,

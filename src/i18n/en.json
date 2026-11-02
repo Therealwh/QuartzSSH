@@ -311,6 +311,13 @@
     "approve": "Allow",
     "deny": "Deny"
   },
+  "tray": {
+    "sectionName": "Background mode",
+    "closeToTray": "Keep running in the background when the window is closed",
+    "hint": "Active SSH sessions and the MCP server keep running when the window is closed. Bring the window back by clicking the tray icon (menu: “Open QuartzSSH” / “Quit”).",
+    "menuOpen": "Open QuartzSSH",
+    "menuQuit": "Quit"
+  },
   "status": {
     "sessions": "{{count}} active",
     "noSessions": "No connections",
