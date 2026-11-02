@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import type { Tab } from "../store/sessions";
-import { useSessions } from "../store/sessions";
+import { resolveBroadcastTargets, useSessions } from "../store/sessions";
 import { cycleTheme, useSettings } from "../store/settings";
 import { getTheme, xtermThemeOf } from "../themes";
 import { decodeUtf8Base64, encodeUtf8Base64 } from "../lib/base64";
@@ -42,6 +42,20 @@ export function TerminalPane({ tab }: { tab: Tab }) {
   const fontSize = useSettings((s) => s.fontSize);
   const themeId = useSettings((s) => s.themeId);
   const reconnectTab = useSessions((s) => s.reconnectTab);
+
+  // Sends text to the active session; in broadcast mode both keystrokes and
+  // pastes are mirrored to every connected terminal (own session included).
+  // Only input is broadcast — each session's output stays in its own pane.
+  const sendInput = (data: string) => {
+    if (!tab.sessionId) return;
+    const payload = encodeUtf8Base64(data);
+    if (useSessions.getState().broadcastMode) {
+      const targets = resolveBroadcastTargets(connectedTerminalSessions(), tab.sessionId);
+      for (const sessionId of targets) void ipc.sshWrite(sessionId, payload);
+      return;
+    }
+    void ipc.sshWrite(tab.sessionId, payload);
+  };
 
   // Create the terminal once (xterm is code-split and loaded on demand).
   useEffect(() => {
@@ -93,20 +107,9 @@ export function TerminalPane({ tab }: { tab: Tab }) {
         }
       });
 
-      // Input to the session; in broadcast mode every keystroke is mirrored
-      // to all connected terminals (own session included). Only input is
-      // broadcast — each session's output stays in its own pane.
-      term.onData((data) => {
-        const payload = encodeUtf8Base64(data);
-        if (useSessions.getState().broadcastMode) {
-          const targets = connectedTerminalSessions();
-          if (targets.length > 1) {
-            for (const sessionId of targets) void ipc.sshWrite(sessionId, payload);
-            return;
-          }
-        }
-        if (tab.sessionId) void ipc.sshWrite(tab.sessionId, payload);
-      });
+      // Input to the session (keystrokes and pastes alike go through
+      // sendInput, which handles broadcast mode).
+      term.onData(sendInput);
 
       // Keyboard shortcuts inside the terminal.
       term.attachCustomKeyEventHandler((e) => {
@@ -118,7 +121,7 @@ export function TerminalPane({ tab }: { tab: Tab }) {
           }
           if (e.ctrlKey && e.shiftKey && (e.key === "V" || e.key === "v")) {
             void navigator.clipboard.readText().then((text) => {
-              if (tab.sessionId && text) void ipc.sshWrite(tab.sessionId, encodeUtf8Base64(text));
+              if (text) sendInput(text);
             });
             return false;
           }
@@ -310,7 +313,7 @@ export function TerminalPane({ tab }: { tab: Tab }) {
             className="q-menu-item"
             onClick={() => {
               void navigator.clipboard.readText().then((text) => {
-                if (tab.sessionId && text) void ipc.sshWrite(tab.sessionId, encodeUtf8Base64(text));
+                if (text) sendInput(text);
               });
               setMenu(null);
             }}
