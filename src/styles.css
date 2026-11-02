@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+:root {
+  --q-bg: #1e1e2e;
+  --q-panel: #181825;
+  --q-elevated: #313244;
+  --q-hover: #45475a;
+  --q-active: #45475a;
+  --q-border: #313244;
+  --q-text: #cdd6f4;
+  --q-muted: #a6adc8;
+  --q-accent: #b4befe;
+  --q-accent-text: #1e1e2e;
+  --q-danger: #f38ba8;
+  --q-warning: #f9e2af;
+  --q-success: #a6e3a1;
+
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--q-bg);
+  color: var(--q-text);
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--q-text);
+  background: var(--q-elevated);
+  border: 1px solid var(--q-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+  user-select: text;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--q-accent);
+  outline-offset: -1px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--q-elevated);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--q-hover);
+}
+
+/* Shared component styles */
+.q-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--q-elevated);
+  transition: background 0.12s ease;
+  white-space: nowrap;
+}
+.q-btn:hover {
+  background: var(--q-hover);
+}
+.q-btn-primary {
+  background: var(--q-accent);
+  color: var(--q-accent-text);
+}
+.q-btn-primary:hover {
+  filter: brightness(1.08);
+}
+.q-btn-danger {
+  background: var(--q-danger);
+  color: #1e1e1e;
+}
+.q-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--q-muted);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.q-icon-btn:hover {
+  background: var(--q-hover);
+  color: var(--q-text);
+}
+
+.q-input {
+  width: 100%;
+}
+
+.q-row:hover {
+  background: var(--q-hover);
+}
+.q-row-selected {
+  background: var(--q-active);
+}
+
+.q-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.q-modal {
+  background: var(--q-panel);
+  border: 1px solid var(--q-border);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 50%);
+  min-width: 380px;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.q-menu {
+  position: fixed;
+  z-index: 60;
+  background: var(--q-panel);
+  border: 1px solid var(--q-border);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 45%);
+}
+
+.q-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  text-align: left;
+}
+.q-menu-item:hover {
+  background: var(--q-hover);
+}
+
+.xterm .xterm-screen {
+  user-select: text;
+}
