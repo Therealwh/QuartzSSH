@@ -1,0 +1,88 @@
+name: WebDriver smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  webdriver-smoke:
+    # E2E smoke (task 19.3): tauri-driver proxies WebDriver to the real
+    # debug binary driven through WebKitWebDriver under Xvfb and asserts
+    # that the application window renders its shell UI.
+    # Local reproduction: docs/testing.md.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Rust cache
+        uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
+        with:
+          workspaces: src-tauri
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            webkit2gtk-driver xvfb dbus
+      - name: Install npm dependencies
+        run: npm ci
+      - name: Build application (debug, no bundle)
+        # `tauri build` embeds ../dist (built by the beforeBuildCommand) and
+        # adds the tauri/custom-protocol feature, without which the binary
+        # would run in dev mode and expect the Vite dev server. --no-bundle
+        # skips installers; the binary lands in src-tauri/target/debug/.
+        run: npx tauri build --debug --no-bundle
+      - name: Install tauri-driver
+        # The tauri-driver version is independent of the Tauri runtime
+        # version; 2.x is the stable line for Tauri v2.
+        run: cargo install tauri-driver --version 2.1.0 --locked
+      - name: Run WebDriver smoke test
+        env:
+          # WebKit on a virtual display: disable GPU paths that are known
+          # to hang or crash in CI virtual machines.
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: |
+          export QUARTZSSH_BINARY="$PWD/src-tauri/target/debug/quartzssh"
+          # One dbus session for the whole chain: tauri-driver spawns
+          # WebKitWebDriver, which talks to the application over the session
+          # bus, so the driver and the test must share it.
+          dbus-run-session -- xvfb-run -a bash -c '
+            set -eu
+            "$HOME/.cargo/bin/tauri-driver" > tauri-driver.log 2>&1 &
+            driver_pid=$!
+            trap "kill $driver_pid 2>/dev/null || true" EXIT
+            ready=0
+            for i in $(seq 1 30); do
+              if (echo > /dev/tcp/127.0.0.1/4444) 2>/dev/null; then
+                ready=1
+                echo "tauri-driver is ready"
+                break
+              fi
+              if ! kill -0 $driver_pid 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "tauri-driver did not start:"
+              cat tauri-driver.log
+              exit 1
+            fi
+            node tests/webdriver/smoke.ts
+          '
+      - name: Dump tauri-driver log on failure
+        if: failure()
+        run: cat tauri-driver.log

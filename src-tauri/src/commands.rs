@@ -181,6 +181,12 @@ pub fn ssh_sessions(ssh: State<SshManager>) -> Vec<ssh::SessionInfo> {
     ssh.info()
 }
 
+/// Classify a key file (standard OpenSSH / PuTTY / FIDO2 hardware) for UI badges.
+#[tauri::command]
+pub fn key_inspect(path: String) -> Result<ssh::KeyFileInfo, String> {
+    ssh::inspect_key_file(&path)
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostKeyAnswer {

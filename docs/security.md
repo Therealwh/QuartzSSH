@@ -28,6 +28,47 @@ with standard tools. Import from `~/.ssh/known_hosts` merges new lines only.
   `arcfour`, `3des-cbc`. RSA private keys always sign with SHA-256.
 - The SHA-1 based MACs are not offered by default.
 
+## Post-Quantum & FIDO2
+
+### Post-quantum key exchange
+
+`mlkem768x25519-sha256` — the hybrid of ML-KEM-768 (FIPS 203) and X25519 — is
+enabled by default and preferred during negotiation, so it is used whenever the
+server supports it (OpenSSH 9.9+ with post-quantum KEX). The classical
+`curve25519-sha256` remains available as a fallback, which means the hybrid
+exchange is not a single point of failure: a failure or absence of ML-KEM on
+either side degrades to the classical path instead of dropping the connection.
+
+### FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`, `sk-ecdsa-sha2-nistp256@openssh.com`)
+
+Status, honestly stated:
+
+- **Ready — detection and classification.** Key files are inspected
+  (`inspect_key_file`): hardware keys are recognized by the companion `.pub`
+  file (`sk-ssh-ed25519@openssh.com` / `sk-ecdsa-sha2-nistp256@openssh.com`,
+  certificate variants included) and by scanning the decoded private-key blob;
+  PuTTY `.ppk` and standard OpenSSH keys are classified too. The connect dialog
+  shows a badge with the key kind and, for hardware keys, a hint that a touch
+  (user presence) is required at connect time.
+- **Ready — honest failure instead of a broken attempt.** The pure-Rust stack
+  (russh 0.65 / ssh-key 0.7) can parse and *verify* `sk-*` keys, but it cannot
+  perform user-presence signing: the private material never leaves the token.
+  Attempting to authenticate with a hardware key returns the explicit error
+  `hardware_key_unsupported: FIDO2 user-presence signing requires libfido2
+  integration (planned)` instead of an obscure signature failure mid-handshake.
+- **Planned — user-presence signing** via libfido2 (or the native OS
+  FIDO/CTAP APIs), including touch prompts and PIN handling. No
+  authentication attempt is simulated until then.
+
+Limitations:
+
+- Not all servers accept `sk-*` keys — the server must list the `sk-*`
+  algorithms in `PubkeyAcceptedAlgorithms` (OpenSSH 8.2+ for the base keys).
+- `sk-*` certificate variants (`-cert-v01@openssh.com`) are classified as
+  hardware keys as well, since they are signed by the same tokens.
+- Encrypted private keys whose blob cannot be decoded without a passphrase
+  cannot be pre-classified; the error then comes from the key parser.
+
 ## Credential storage
 
 Passwords and key passphrases are stored exclusively in the operating system

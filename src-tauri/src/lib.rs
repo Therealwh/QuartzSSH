@@ -54,6 +54,7 @@ pub fn run() {
             commands::ssh_resize,
             commands::ssh_exec,
             commands::ssh_sessions,
+            commands::key_inspect,
             commands::host_key_respond,
             commands::known_hosts_list,
             commands::known_hosts_remove,

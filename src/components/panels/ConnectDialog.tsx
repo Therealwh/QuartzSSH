@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../dialogs/Modal";
+import { ipc } from "../../lib/ipc";
 import { useSessions } from "../../store/sessions";
 import { useDialogs } from "../../store/dialogs";
-import { ipc } from "../../lib/ipc";
 import { CloseIcon, PlusIcon } from "../icons";
-import type { Profile, ProfileInput } from "../../types";
+import type { KeyFileInfo, Profile, ProfileInput } from "../../types";
 
 interface Props {
   profile?: Profile;
@@ -42,6 +42,7 @@ export function ConnectDialog({ profile, onClose }: Props) {
   const [autoReconnect, setAutoReconnect] = useState(profile?.autoReconnect ?? true);
   const [forwards, setForwards] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [keyInfo, setKeyInfo] = useState<KeyFileInfo | null>(null);
 
   const setForward = (index: number, value: string) =>
     setForwards((prev) => prev.map((v, i) => (i === index ? value : v)));
@@ -50,6 +51,25 @@ export function ConnectDialog({ profile, onClose }: Props) {
     setForwards((prev) => prev.filter((_, i) => i !== index));
 
   const knownGroups = [...new Set(profiles.map((p) => p.group).filter(Boolean))];
+
+  // Classify the selected key file (standard / PuTTY / FIDO2 hardware) with a
+  // small debounce so typing a path does not spam the backend. Informational
+  // only: it never blocks connecting — the backend reports an explicit error
+  // for key kinds it cannot sign.
+  useEffect(() => {
+    const trimmed = keyPath.trim();
+    if (authKind !== "publicKey" || !trimmed) {
+      setKeyInfo(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void ipc
+        .keyInspect(trimmed)
+        .then(setKeyInfo)
+        .catch(() => setKeyInfo(null));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyPath, authKind]);
 
   const buildInput = (): ProfileInput => ({
     id: profile?.id,
@@ -190,6 +210,31 @@ export function ConnectDialog({ profile, onClose }: Props) {
                 {t("connect.browse")}
               </button>
             </label>
+            {keyInfo && (
+              <div className="space-y-1.5">
+                <div className="text-xs">
+                  {keyInfo.kind === "hardwareFido2" ? (
+                    <span className="inline-flex items-center rounded border border-[var(--q-border)] bg-[var(--q-hover)] px-1.5 py-0.5 font-medium text-[var(--q-warning,#d97706)]">
+                      {t("fido2.badgeHardware", { algorithm: keyInfo.algorithm })}
+                    </span>
+                  ) : keyInfo.kind === "putty" ? (
+                    <span className="inline-flex items-center rounded border border-[var(--q-border)] bg-[var(--q-hover)] px-1.5 py-0.5 text-[var(--q-muted)]">
+                      {t("fido2.badgePutty")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded border border-[var(--q-border)] bg-[var(--q-hover)] px-1.5 py-0.5 text-[var(--q-muted)]">
+                      {t("fido2.badgeStandard")}
+                    </span>
+                  )}
+                </div>
+                {keyInfo.kind === "hardwareFido2" && (
+                  <div className="space-y-1 text-xs text-[var(--q-muted)]">
+                    <p>{t("fido2.touchHint")}</p>
+                    <p>{t("fido2.libfido2Hint")}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <label className="block">
               <div className="mb-1 text-xs text-[var(--q-muted)]">{t("connect.keyPassphrase")}</div>
               <input
