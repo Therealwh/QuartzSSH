@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sk-ecdsa-sha2-nistp256@openssh.com`) with a key-type badge in the connect
   dialog and an honest early error on connect — user-presence signing via
   libfido2 is planned (PR #20).
+- Security unit tests: client algorithm preferences keep the post-quantum
+  KEX first and exclude SHA-1 KEX/ciphers/MACs plus the bare `ssh-rsa` host
+  key algorithm, and known_hosts first-contact/changed-key detection is
+  covered.
+- `Ctrl + T` opens a new tab connected to the same profile as the active
+  terminal (a disconnected active tab is reconnected in place).
 
 ### Changed
 
@@ -55,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- known_hosts verification never matched a pinned key (the parser cut the
+  key blob after the algorithm name), so every reconnect was misreported as
+  a changed host key instead of `Known`; the security unit tests for the
+  changed/known/new states caught it.
 - russh-sftp `SftpSession::write` opens the target without `TRUNCATE`, so
   writing shorter content left a stale tail on the server (silent
   corruption). All remote write paths now open files with

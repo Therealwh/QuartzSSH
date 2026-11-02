@@ -159,6 +159,11 @@ export function TerminalPane({ tab }: { tab: Tab }) {
               return false;
             }
           }
+          if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "t" || e.key === "T")) {
+            e.preventDefault();
+            useSessions.getState().duplicateActiveSessionTab();
+            return false;
+          }
           if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "w" || e.key === "W")) {
             e.preventDefault();
             void useSessions.getState().closeTab(tab.id);
