@@ -85,7 +85,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
   libfido2 is planned
 
 - [x] Optional MCP server for AI agents (off by default; [docs/mcp-server.md](docs/mcp-server.md))
-- [ ] tauri-driver smoke e2e (in progress)
+- [x] tauri-driver smoke e2e (WebDriver, CI)
 - [x] Broadcast paste in split view
 - [ ] Updater e2e after the first release
 
