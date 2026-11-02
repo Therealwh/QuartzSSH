@@ -36,3 +36,6 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local git worktrees for parallel feature branches
+.worktrees/
