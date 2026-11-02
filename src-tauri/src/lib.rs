@@ -72,7 +72,6 @@ pub fn run() {
             commands::monitoring_open,
             commands::monitoring_close,
             commands::monitoring_is_open,
-
             commands::local_list,
             commands::local_home,
             commands::local_mkdir,
