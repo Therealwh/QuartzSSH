@@ -28,7 +28,7 @@ export function TabBar() {
   return (
     <div
       className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-[var(--q-border)] bg-[var(--q-panel)]"
-      role="tablist"
+      role={tabs.length ? "tablist" : undefined}
       data-testid="tab-bar"
     >
       {tabs.map((tab) => {

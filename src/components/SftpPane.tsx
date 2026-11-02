@@ -284,7 +284,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
         </div>
         {toolbar("local")}
         {pathBar("local", local)}
-        <div role={local?.entries.length ? "table" : "list"} aria-label={t("sftp.local")} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
+        <div role={local?.entries.length ? "table" : undefined} aria-label={t("sftp.local")} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {local?.entries.length ? renderRows("local", local) : <Empty t={t} />}
         </div>
       </section>
@@ -295,7 +295,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
         </div>
         {toolbar("remote")}
         {pathBar("remote", remote)}
-        <div role={remote?.entries.length ? "table" : "list"} aria-label={t("sftp.remote", { host: tab.host ?? "" })} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
+        <div role={remote?.entries.length ? "table" : undefined} aria-label={t("sftp.remote", { host: tab.host ?? "" })} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {remote?.entries.length ? renderRows("remote", remote) : <Empty t={t} />}
         </div>
       </section>
