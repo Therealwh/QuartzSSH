@@ -9,12 +9,49 @@ interface ModalProps {
   wide?: boolean;
 }
 
+// Lightweight focus trap: keep Tab cycling inside the dialog (task 20).
+// A full trap (return-focus-to-opener, aria-hidden on the rest of the app)
+// is deliberately deferred; this covers the common keyboard path.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function trapTabFocus(e: KeyboardEvent, dialog: HTMLDivElement | null) {
+  if (!dialog) return;
+  const active = document.activeElement;
+  // Skip when another (nested) dialog owns the focus, so two modals never
+  // fight over the same Tab press.
+  if (!dialog.contains(active)) return;
+
+  const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  if (focusables.length === 0) {
+    e.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (active === dialog) {
+    // Focus sits on the dialog container itself: pull it onto a real control.
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  } else if (active === first && e.shiftKey) {
+    e.preventDefault();
+    last.focus();
+  } else if (active === last && !e.shiftKey) {
+    e.preventDefault();
+    first.focus();
+  }
+  // Otherwise the default Tab target is the next focusable in DOM order,
+  // which is still inside the dialog.
+}
+
 export function Modal({ title, onClose, children, wide }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose?.();
+      if (e.key === "Tab") trapTabFocus(e, ref.current);
     };
     window.addEventListener("keydown", handler);
     ref.current?.focus();

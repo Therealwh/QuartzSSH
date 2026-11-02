@@ -40,7 +40,13 @@ export function TabBar() {
             aria-selected={active}
             tabIndex={0}
             onClick={() => setActiveTab(tab.id)}
-            onKeyDown={(e) => e.key === "Enter" && setActiveTab(tab.id)}
+            onKeyDown={(e) => {
+              // Tabs are keyboard-activatable with Enter or Space (ARIA APG).
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setActiveTab(tab.id);
+              }
+            }}
             className={`group flex min-w-[120px] max-w-[220px] cursor-pointer items-center gap-2 border-r border-[var(--q-border)] px-3 text-sm ${
               active
                 ? "bg-[var(--q-bg)] text-[var(--q-text)]"

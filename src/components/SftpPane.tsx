@@ -186,6 +186,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
     return state.entries.map((entry) => (
       <div
         key={entry.name}
+        role="row"
         className="q-row flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm"
         onClick={() => entry.isDir && navigate(side, entry.path)}
         onDoubleClick={() => {
@@ -211,17 +212,17 @@ export function SftpPane({ tab }: { tab: Tab }) {
           e.dataTransfer.setData("application/x-quartzssh-entry", JSON.stringify({ side, entry }));
         }}
       >
-        <span className="shrink-0 text-[var(--q-muted)]">
+        <span role="cell" aria-hidden="true" className="shrink-0 text-[var(--q-muted)]">
           <FolderIcon size={13} />
         </span>
-        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-        <span className="w-20 shrink-0 text-right text-xs text-[var(--q-muted)]">
+        <span role="cell" className="min-w-0 flex-1 truncate">{entry.name}</span>
+        <span role="cell" className="w-20 shrink-0 text-right text-xs text-[var(--q-muted)]">
           {entry.isDir ? "" : formatBytes(entry.size)}
         </span>
-        <span className="hidden w-36 shrink-0 text-right text-xs text-[var(--q-muted)] xl:block">
+        <span role="cell" className="hidden w-36 shrink-0 text-right text-xs text-[var(--q-muted)] xl:block">
           {formatTime(entry.modified)}
         </span>
-        <span className="hidden w-12 shrink-0 text-right font-mono text-xs text-[var(--q-muted)] lg:block">
+        <span role="cell" className="hidden w-12 shrink-0 text-right font-mono text-xs text-[var(--q-muted)] lg:block">
           {entry.permissions}
         </span>
       </div>
@@ -283,7 +284,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
         </div>
         {toolbar("local")}
         {pathBar("local", local)}
-        <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
+        <div role="table" aria-label={t("sftp.local")} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {local?.entries.length ? renderRows("local", local) : <Empty t={t} />}
         </div>
       </section>
@@ -294,7 +295,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
         </div>
         {toolbar("remote")}
         {pathBar("remote", remote)}
-        <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
+        <div role="table" aria-label={t("sftp.remote", { host: tab.host ?? "" })} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {remote?.entries.length ? renderRows("remote", remote) : <Empty t={t} />}
         </div>
       </section>
