@@ -259,6 +259,44 @@ export const THEMES: Theme[] = [
       ],
     },
   },
+  {
+    // Spec 20.3: maximum-contrast scheme (pure black background, white text,
+    // yellow accent). Every text-bearing pair stays at or above the WCAG AAA
+    // 7:1 threshold and the ANSI palette stays at or above 4.5:1 against the
+    // terminal background; see tests/highContrast.test.ts.
+    id: "high-contrast",
+    name: "High Contrast",
+    isDark: true,
+    ui: {
+      bg: "#000000",
+      panel: "#000000",
+      elevated: "#1a1a1a",
+      hover: "#2e2e2e",
+      active: "#3a3a3a",
+      border: "#bfbfbf",
+      text: "#ffffff",
+      muted: "#bfbfbf",
+      accent: "#ffff00",
+      accentText: "#000000",
+      danger: "#ff5555",
+      warning: "#ffcc00",
+      success: "#00ff00",
+    },
+    term: {
+      bg: "#000000",
+      fg: "#ffffff",
+      cursor: "#ffff00",
+      selection: "#005f87",
+      ansi: [
+        // The "black" slot is mid-gray so black text is still visible on the
+        // black background; every other slot is a fully saturated hue.
+        "#7f7f7f", "#ff5555", "#55ff55", "#ffff55",
+        "#6666ff", "#ff55ff", "#55ffff", "#ffffff",
+        "#bfbfbf", "#ff8080", "#80ff80", "#ffff80",
+        "#8080ff", "#ff80ff", "#80ffff", "#ffffff",
+      ],
+    },
+  },
 ];
 
 export const DEFAULT_THEME_ID = "catppuccin-mocha";
