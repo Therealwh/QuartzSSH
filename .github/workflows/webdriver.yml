@@ -27,7 +27,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - name: Rust cache
-        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
         with:
           workspaces: src-tauri
       - name: Install Linux dependencies
@@ -83,6 +83,133 @@ jobs:
             fi
             node tests/webdriver/smoke.ts
           '
+      - name: Capture README screenshots
+        # Best-effort follow-up to the smoke gate, in its own WebDriver
+        # session (tauri-driver spawns a fresh app instance for it). The
+        # script swallows per-step errors and always exits 0, so a screenshot
+        # problem can never fail the smoke job; a partial set simply shrinks
+        # the artifact below.
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: |
+          export QUARTZSSH_BINARY="$PWD/src-tauri/target/debug/quartzssh"
+          dbus-run-session -- xvfb-run -a bash -c '
+            set -eu
+            "$HOME/.cargo/bin/tauri-driver" > tauri-driver.log 2>&1 &
+            driver_pid=$!
+            trap "kill $driver_pid 2>/dev/null || true" EXIT
+            ready=0
+            for i in $(seq 1 30); do
+              if (echo > /dev/tcp/127.0.0.1/4444) 2>/dev/null; then
+                ready=1
+                echo "tauri-driver is ready"
+                break
+              fi
+              if ! kill -0 $driver_pid 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "tauri-driver did not start; skipping screenshots:"
+              cat tauri-driver.log
+              exit 0
+            fi
+            node tests/webdriver/screenshots.ts
+          '
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-screenshots
+          path: docs/screenshots/*.png
+          retention-days: 30
+          if-no-files-found: ignore
       - name: Dump tauri-driver log on failure
         if: failure()
         run: cat tauri-driver.log
+
+  memory-budget:
+    # Idle RSS budget (roadmap 21.4): after a 45 s warm-up on a headless
+    # display (first paint plus the automatic update check) the release
+    # binary must stay under RSS_BUDGET_MIB.
+    #
+    # continue-on-error: this job launches the raw release binary directly
+    # under Xvfb/dbus, without tauri-driver in the loop. That path is not yet
+    # validated in CI (the smoke job only drives the debug binary through
+    # WebKitWebDriver), so keep the job advisory — visible in the checks
+    # list but non-blocking — until its first green runs; then remove this
+    # flag to make the budget a hard gate.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Rust cache
+        uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
+        with:
+          workspaces: src-tauri
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            xvfb dbus
+      - name: Install npm dependencies
+        run: npm ci
+      - name: Build application (release, no bundle)
+        # `tauri build` (release profile by default) embeds ../dist and
+        # enables the tauri/custom-protocol feature; a plain
+        # `cargo build --release` would produce a binary that expects the
+        # Vite dev server. --no-bundle skips installers; the binary lands in
+        # src-tauri/target/release/.
+        run: npx tauri build --no-bundle
+      - name: Measure idle RSS
+        env:
+          # WebKit on a virtual display: disable GPU paths that are known
+          # to hang or crash in CI virtual machines.
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+          # Idle RSS budget in MiB; override here to re-tune the gate.
+          RSS_BUDGET_MIB: "50"
+        run: |
+          dbus-run-session -- xvfb-run -a bash -c '
+            set -u
+            ./src-tauri/target/release/quartzssh > quartzssh-idle.log 2>&1 &
+            app_pid=$!
+            trap "kill $app_pid 2>/dev/null || true" EXIT
+            # Warm-up: first paint plus the automatic update check.
+            sleep 45
+            if ! kill -0 $app_pid 2>/dev/null; then
+              echo "quartzssh exited before measurement:"
+              cat quartzssh-idle.log
+              exit 1
+            fi
+            # Resident set size of the application process in kilobytes
+            # (WebKit spawns its helper processes under different names, so
+            # -C quartzssh matches the app itself).
+            rss_kb=$(ps -o rss= -C quartzssh | awk "{s += \$1} END {print s + 0}")
+            budget_mib=${RSS_BUDGET_MIB:-50}
+            budget_kb=$((budget_mib * 1024))
+            rss_mib=$((rss_kb / 1024))
+            echo "Idle RSS: ${rss_kb} kB (~${rss_mib} MiB), budget: ${budget_mib} MiB"
+            if [ "$rss_kb" -le 0 ]; then
+              echo "FAIL: could not read the RSS of quartzssh (process not found)"
+              cat quartzssh-idle.log
+              exit 1
+            fi
+            if [ "$rss_kb" -gt "$budget_kb" ]; then
+              echo "FAIL: idle RSS ${rss_mib} MiB exceeds the ${budget_mib} MiB budget"
+              cat quartzssh-idle.log
+              exit 1
+            fi
+            echo "OK: idle RSS within budget"
+          '
+      - name: Dump application log on failure
+        if: failure()
+        run: cat quartzssh-idle.log || true

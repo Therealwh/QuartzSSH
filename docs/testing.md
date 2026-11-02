@@ -97,6 +97,66 @@ locally install `msedgedriver` matching your Edge version, put it on `PATH`,
 and run `tauri-driver` + the same smoke script (the `application` capability
 points at `src-tauri\target\debug\quartzssh.exe`).
 
+## Capturing README screenshots
+
+[`tests/webdriver/screenshots.ts`](../tests/webdriver/screenshots.ts) captures
+the application in the key UI states used by the README — the fresh shell with
+the sessions panel, the settings view, a second color scheme (one click on the
+status-bar theme button), and the monitoring tab — into `docs/screenshots/*.png`.
+
+It runs in the same CI job as the smoke test, in its own WebDriver session,
+strictly as a best-effort step after the smoke assertions: every capture is
+wrapped in `try/catch` and the script always exits 0, so a screenshot problem
+can never fail the smoke gate. CI uploads the PNGs as the **app-screenshots**
+artifact (retention: 30 days).
+
+To refresh the images embedded in the README:
+
+1. Open the repository on GitHub → **Actions** → *WebDriver smoke* → pick a
+   green run → download the `app-screenshots` artifact, or use the CLI:
+   `gh run download <run-id> -n app-screenshots`.
+2. Unzip it into `docs/screenshots/` in your checkout and review the PNGs
+   (they are captured from a 1280x800 window on a headless display).
+3. Commit the good ones manually — CI never commits screenshots itself.
+
+To capture locally, build the app (see [Prerequisites](#prerequisites-linux))
+and reuse the smoke-test launch recipe with the screenshots script:
+
+```sh
+export QUARTZSSH_BINARY="$PWD/src-tauri/target/debug/quartzssh"
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+dbus-run-session -- xvfb-run -a bash -c '
+  "$HOME/.cargo/bin/tauri-driver" > tauri-driver.log 2>&1 &
+  driver_pid=$!
+  trap "kill $driver_pid 2>/dev/null || true" EXIT
+  for i in $(seq 1 30); do
+    (echo > /dev/tcp/127.0.0.1/4444) 2>/dev/null && break
+    sleep 1
+  done
+  node tests/webdriver/screenshots.ts
+'
+```
+
+Output goes to `docs/screenshots/` (override with
+`QUARTZSSH_SCREENSHOTS_DIR`).
+
+## Idle memory budget (memory-budget job)
+
+The second job in [`.github/workflows/webdriver.yml`], `memory-budget`,
+builds the release binary (`npx tauri build --no-bundle` — a plain
+`cargo build --release` is not enough, the binary must embed the frontend),
+runs it directly under Xvfb with a private session bus, waits 45 s (first
+paint plus the automatic update check) and reads its resident set size with
+`ps -o rss= -C quartzssh`. The job fails when idle RSS exceeds
+`RSS_BUDGET_MIB` (50 MiB by default, editable in the workflow).
+
+The job currently runs with `continue-on-error: true`: launching the raw
+release binary under a virtual display without tauri-driver is a newer,
+not-yet-fully-validated path in CI, so budget violations are advisory
+until the flag is removed.
+
 ## Updating the smoke test
 
 - Keep the assertion list minimal — this suite answers "did the app start and

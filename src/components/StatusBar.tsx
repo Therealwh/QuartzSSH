@@ -66,6 +66,7 @@ export function StatusBar() {
       <button
         className="hover:text-[var(--q-text)]"
         title={t("status.theme")}
+        data-testid="statusbar-theme"
         onClick={() => setTheme(nextTheme.id)}
       >
         {theme.name}

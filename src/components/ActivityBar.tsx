@@ -25,6 +25,7 @@ export function ActivityBar() {
         className={`${item} ${firstTerminalTab && activeTabId === firstTerminalTab.id ? itemActive : ""}`}
         title={t("activity.sessions")}
         aria-label={t("activity.sessions")}
+        data-testid="activity-sessions"
         onClick={() => firstTerminalTab && setActiveTab(firstTerminalTab.id)}
       >
         <TerminalIcon size={20} />
@@ -33,6 +34,7 @@ export function ActivityBar() {
         className={`${item} ${tabs.some((tab) => tab.id === activeTabId && tab.kind === "sftp") ? itemActive : ""}`}
         title={t("activity.sftp")}
         aria-label={t("activity.sftp")}
+        data-testid="activity-sftp"
         onClick={() => firstTerminalTab && setActiveTab(firstTerminalTab.id)}
       >
         <FolderIcon size={20} />
@@ -41,6 +43,7 @@ export function ActivityBar() {
         className={`${item} ${tabs.some((tab) => tab.id === activeTabId && tab.kind === "monitoring") ? itemActive : ""}`}
         title={t("activity.monitoring")}
         aria-label={t("activity.monitoring")}
+        data-testid="activity-monitoring"
         onClick={openMonitoringTab}
       >
         <GaugeIcon size={20} />
@@ -49,6 +52,7 @@ export function ActivityBar() {
         className={`${item} ${tabs.some((tab) => tab.id === activeTabId && tab.kind === "settings") ? itemActive : ""}`}
         title={t("activity.settings")}
         aria-label={t("activity.settings")}
+        data-testid="activity-settings"
         onClick={openSettingsTab}
       >
         <SettingsIcon size={20} />
