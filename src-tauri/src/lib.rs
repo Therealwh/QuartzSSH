@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod forward;
 mod localfs;
+mod mcp;
 mod monitoring;
 mod sftp;
 mod ssh;
@@ -37,8 +38,10 @@ pub fn run() {
             app.manage(SshManager::default());
             app.manage(SftpManager::default());
             app.manage(Arc::new(TransferManager::default()));
+            app.manage(Arc::new(mcp::McpState::default()));
             app.manage(monitoring::MonitoringManager::default());
             app.manage(forward::ForwardManager::default());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -85,6 +88,12 @@ pub fn run() {
             commands::settings_get,
             commands::settings_set,
             commands::app_version,
+            mcp::mcp_start,
+            mcp::mcp_stop,
+            mcp::mcp_status,
+            mcp::mcp_audit_list,
+            mcp::mcp_audit_clear,
+            mcp::mcp_confirm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -9,6 +9,9 @@ import type {
   HostKeyDecision,
   KnownHostEntry,
   LocalListing,
+  McpAuditEntry,
+  McpStartResult,
+  McpStatus,
   Profile,
   ProfileInput,
   RemoteFileContent,
@@ -118,6 +121,15 @@ export const ipc = {
   settingsGet: () => invoke<AppSettings>("settings_get"),
   settingsSet: (value: AppSettings) => invoke<void>("settings_set", { value }),
   appVersion: () => invoke<string>("app_version"),
+
+  // MCP bridge
+  mcpStart: () => invoke<McpStartResult>("mcp_start"),
+  mcpStop: () => invoke<boolean>("mcp_stop"),
+  mcpStatus: () => invoke<McpStatus>("mcp_status"),
+  mcpAuditList: () => invoke<McpAuditEntry[]>("mcp_audit_list"),
+  mcpAuditClear: () => invoke<void>("mcp_audit_clear"),
+  mcpConfirm: (callId: string, approved: boolean) =>
+    invoke<void>("mcp_confirm", { callId, approved }),
 };
 
 export type { FileEntry };

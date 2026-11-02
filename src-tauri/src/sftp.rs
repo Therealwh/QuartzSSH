@@ -87,6 +87,17 @@ impl SftpManager {
         self.sessions.lock().unwrap().remove(id)
     }
 
+    /// Find an open SFTP session by its SSH session id (read-only lookup
+    /// used by the MCP bridge; the UI tracks sftp ids per profile itself).
+    pub fn find_by_session(&self, session_id: &str) -> Option<Arc<SftpHandle>> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .values()
+            .find(|h| h.session_id == session_id)
+            .cloned()
+    }
+
     pub async fn open(&self, ssh: &SshManager, session_id: &str) -> Result<String, String> {
         let ssh_session = ssh
             .get(session_id)
