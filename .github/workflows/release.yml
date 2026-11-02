@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Create draft release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        id: create
+        with:
+          script: |
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref.replace('refs/tags/', ''),
+              name: context.ref.replace('refs/tags/', ''),
+              draft: true,
+              prerelease: false
+            });
+            return release.data.id;
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Rust cache
+        uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
+        with:
+          workspaces: src-tauri
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install NASM (Windows build dependency for ring)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: choco install nasm -y --no-progress
+      - name: Add NASM to PATH
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: echo "$env:ProgramFiles\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build and sign
+        uses: tauri-apps/tauri-action@2ac167f625e3af3b874cf574f115d5e74f4b1f90 # v0.5.19
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.args }}
+
+  generate-latest-json:
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build latest.json from signed release assets
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID)
+            });
+            const assets = release.assets.map(a => a.name);
+            const version = release.tag_name.replace(/^v/, '');
+
+            // Installer suffix per platform; the signature is always
+            // `<installer>.sig`. Every platform MUST have both, otherwise the
+            // release fails (never publish an unsigned update).
+            const platforms = {
+              'windows-x86_64': ['x64-setup.exe', '.msi.zip'],
+              'darwin-aarch64': ['aarch64.app.tar.gz'],
+              'darwin-x86_64': ['x64.app.tar.gz'],
+              'linux-x86_64': ['amd64.AppImage', 'x86_64.AppImage']
+            };
+
+            const result = {
+              version,
+              notes: `QuartzSSH ${version}`,
+              pub_date: new Date().toISOString(),
+              platforms: {}
+            };
+            const missing = [];
+
+            for (const [plat, suffixes] of Object.entries(platforms)) {
+              const installer = assets.find(a => suffixes.some(s => a.endsWith(s)));
+              if (!installer) { missing.push(`${plat}: no installer asset`); continue; }
+              const sigName = installer + '.sig';
+              if (!assets.includes(sigName)) { missing.push(`${plat}: ${sigName} is missing`); continue; }
+              const sigAsset = release.assets.find(a => a.name === sigName);
+              const sig = await github.rest.repos.getReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: sigAsset.id,
+                headers: { Accept: 'application/octet-stream' }
+              });
+              const signature = Buffer.from(sig.data).toString('utf8').trim();
+              if (!signature) { missing.push(`${plat}: empty signature`); continue; }
+              result.platforms[plat] = {
+                signature,
+                url: `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${release.tag_name}/${installer}`
+              };
+            }
+
+            if (missing.length) {
+              core.setFailed(`Unsigned or missing update artifacts: ${missing.join('; ')}`);
+              return;
+            }
+            fs.writeFileSync('latest.json', JSON.stringify(result, null, 2));
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+      - name: Upload latest.json to the release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID)
+            });
+            const existing = release.assets.find(a => a.name === 'latest.json');
+            if (existing) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner, repo: context.repo.repo, asset_id: existing.id
+              });
+            }
+            const data = fs.readFileSync('latest.json');
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: 'latest.json',
+              data,
+              headers: { 'Content-Type': 'application/json' }
+            });
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+
+  publish-release:
+    needs: [create-release, generate-latest-json]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false
+            });
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
