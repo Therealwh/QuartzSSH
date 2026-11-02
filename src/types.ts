@@ -103,6 +103,12 @@ export interface LocalListing {
   entries: LocalEntry[];
 }
 
+/** Text file content for the built-in editor, with its server mtime baseline. */
+export interface RemoteFileContent {
+  content: string;
+  mtime: number | null;
+}
+
 export type TransferStatus = "active" | "done" | "failed" | "cancelled";
 
 export interface TransferEvent {
@@ -161,4 +167,35 @@ export interface McpConfirmRequest {
   tool: string;
   host: string;
   summary: string;
+}
+
+// Monitoring (server health panel)
+
+export interface DiskUsage {
+  mount: string;
+  used: number;
+  total: number;
+}
+
+export interface ProcInfo {
+  name: string;
+  cpuPercent: number;
+  memPercent: number;
+}
+
+export interface SystemStats {
+  /** Null until two consecutive samples exist to diff. */
+  cpuPercent: number | null;
+  load: number[];
+  memUsed: number;
+  memTotal: number;
+  swapUsed: number;
+  swapTotal: number;
+  disks: DiskUsage[];
+  netRxBps: number;
+  netTxBps: number;
+  uptimeSecs: number;
+  osName: string;
+  kernel: string;
+  top: ProcInfo[];
 }

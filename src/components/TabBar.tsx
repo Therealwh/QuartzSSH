@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSessions } from "../store/sessions";
-import { CloseIcon, FolderIcon, SettingsIcon, TerminalIcon } from "./icons";
+import { CloseIcon, FolderIcon, GaugeIcon, PencilIcon, SettingsIcon, TerminalIcon } from "./icons";
 
 export function TabBar() {
   const { t } = useTranslation();
@@ -32,8 +32,16 @@ export function TabBar() {
           >
             {tab.kind === "terminal" && <TerminalIcon />}
             {tab.kind === "sftp" && <FolderIcon />}
+            {tab.kind === "editor" && <PencilIcon />}
+            {tab.kind === "monitoring" && <GaugeIcon />}
             {tab.kind === "settings" && <SettingsIcon />}
             <span className="flex-1 truncate">{tab.title}</span>
+            {tab.dirty && (
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--q-warning)]"
+                title={t("editor.unsaved")}
+              />
+            )}
             {tab.disconnected && (
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--q-danger)]" title={t("terminal.disconnected")} />
             )}

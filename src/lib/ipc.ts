@@ -12,6 +12,7 @@ import type {
   McpStatus,
   Profile,
   ProfileInput,
+  RemoteFileContent,
   SessionInfo,
   SshConfigImportResult,
 } from "../types";
@@ -78,6 +79,27 @@ export const ipc = {
     invoke<string>("sftp_read_text", { sftpId, path, maxBytes: maxBytes ?? null }),
   sftpWriteText: (sftpId: string, path: string, content: string) =>
     invoke<void>("sftp_write_text", { sftpId, path, content }),
+  sftpReadFile: (sftpId: string, path: string, maxBytes?: number) =>
+    invoke<RemoteFileContent>("sftp_read_file", { sftpId, path, maxBytes: maxBytes ?? null }),
+  sftpWriteFile: (
+    sftpId: string,
+    path: string,
+    content: string,
+    expectedMtime: number | null,
+    force: boolean,
+  ) =>
+    invoke<void>("sftp_write_file", {
+      sftpId,
+      path,
+      content,
+      expectedMtime: expectedMtime ?? null,
+      force,
+    }),
+
+  // Monitoring
+  monitoringOpen: (sessionId: string) => invoke<void>("monitoring_open", { sessionId }),
+  monitoringClose: (sessionId: string) => invoke<void>("monitoring_close", { sessionId }),
+  monitoringIsOpen: (sessionId: string) => invoke<boolean>("monitoring_is_open", { sessionId }),
 
   // Local filesystem
   localList: (path: string) => invoke<LocalListing>("local_list", { path }),

@@ -1,12 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { useSessions } from "../store/sessions";
-import { TerminalIcon, FolderIcon, SettingsIcon } from "./icons";
+import { TerminalIcon, FolderIcon, GaugeIcon, SettingsIcon } from "./icons";
 
 export function ActivityBar() {
   const { t } = useTranslation();
   const tabs = useSessions((s) => s.tabs);
   const activeTabId = useSessions((s) => s.activeTabId);
   const setActiveTab = useSessions((s) => s.setActiveTab);
+  const openMonitoringTab = useSessions((s) => s.openMonitoringTab);
   const openSettingsTab = useSessions((s) => s.openSettingsTab);
 
   const firstTerminalTab = tabs.find((tab) => tab.kind === "terminal");
@@ -35,6 +36,14 @@ export function ActivityBar() {
         onClick={() => firstTerminalTab && setActiveTab(firstTerminalTab.id)}
       >
         <FolderIcon size={20} />
+      </button>
+      <button
+        className={`${item} ${tabs.some((tab) => tab.id === activeTabId && tab.kind === "monitoring") ? itemActive : ""}`}
+        title={t("activity.monitoring")}
+        aria-label={t("activity.monitoring")}
+        onClick={openMonitoringTab}
+      >
+        <GaugeIcon size={20} />
       </button>
       <button
         className={`${item} ${tabs.some((tab) => tab.id === activeTabId && tab.kind === "settings") ? itemActive : ""}`}
