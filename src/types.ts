@@ -199,3 +199,15 @@ export interface SystemStats {
   kernel: string;
   top: ProcInfo[];
 }
+
+// Port forwarding
+
+export interface ForwardAdded {
+  forwardId: string;
+}
+
+export interface ForwardEntry {
+  id: string;
+  spec: string;
+  active: boolean;
+}

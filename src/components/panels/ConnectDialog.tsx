@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../dialogs/Modal";
 import { useSessions } from "../../store/sessions";
+import { useDialogs } from "../../store/dialogs";
+import { ipc } from "../../lib/ipc";
+import { CloseIcon, PlusIcon } from "../icons";
 import type { Profile, ProfileInput } from "../../types";
 
 interface Props {
@@ -14,6 +17,7 @@ export function ConnectDialog({ profile, onClose }: Props) {
   const { t } = useTranslation();
   const saveProfile = useSessions((s) => s.saveProfile);
   const connectProfile = useSessions((s) => s.connectProfile);
+  const setUpdateStatus = useDialogs((s) => s.setUpdateStatus);
   const profiles = useSessions((s) => s.profiles);
 
   const [name, setName] = useState(profile?.name ?? "");
@@ -36,7 +40,14 @@ export function ConnectDialog({ profile, onClose }: Props) {
   );
   const [keepalive, setKeepalive] = useState(profile?.keepaliveSeconds ?? 30);
   const [autoReconnect, setAutoReconnect] = useState(profile?.autoReconnect ?? true);
+  const [forwards, setForwards] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const setForward = (index: number, value: string) =>
+    setForwards((prev) => prev.map((v, i) => (i === index ? value : v)));
+  const addForward = () => setForwards((prev) => [...prev, ""]);
+  const removeForward = (index: number) =>
+    setForwards((prev) => prev.filter((_, i) => i !== index));
 
   const knownGroups = [...new Set(profiles.map((p) => p.group).filter(Boolean))];
 
@@ -60,6 +71,20 @@ export function ConnectDialog({ profile, onClose }: Props) {
     autoReconnect,
   });
 
+  /** Creates the port forwards for the freshly opened session; invalid
+   * specs and conflicts surface through the status toast. */
+  const applyForwards = async (sessionId: string) => {
+    for (const raw of forwards) {
+      const spec = raw.trim();
+      if (!spec) continue;
+      try {
+        await ipc.forwardAdd(sessionId, spec);
+      } catch (e) {
+        setUpdateStatus(t("forward.failed", { message: String(e) }));
+      }
+    }
+  };
+
   const submit = async (andConnect: boolean) => {
     if (!name.trim() || !host.trim()) return;
     setBusy(true);
@@ -68,9 +93,12 @@ export function ConnectDialog({ profile, onClose }: Props) {
       authKind === "password" && password ? password : undefined,
       authKind === "publicKey" && keyPassphrase ? keyPassphrase : undefined,
     );
+    if (saved && andConnect) {
+      const sessionId = await connectProfile(saved);
+      if (sessionId) await applyForwards(sessionId);
+    }
     setBusy(false);
     onClose();
-    if (saved && andConnect) void connectProfile(saved);
   };
 
   return (
@@ -200,6 +228,39 @@ export function ConnectDialog({ profile, onClose }: Props) {
           <input type="checkbox" checked={autoReconnect} onChange={(e) => setAutoReconnect(e.target.checked)} />
           {t("connect.autoReconnect")}
         </label>
+
+        <div className="col-span-2">
+          <div className="mb-1 text-xs text-[var(--q-muted)]">{t("forward.title")}</div>
+          <div className="space-y-2">
+            {forwards.map((value, index) => (
+              <div key={index} className="flex gap-2">
+                <input
+                  className="q-input flex-1 font-mono text-xs"
+                  value={value}
+                  placeholder={t("forward.specPlaceholder")}
+                  onChange={(e) => setForward(index, e.target.value)}
+                  spellCheck={false}
+                  aria-label={t("forward.title")}
+                />
+                <button
+                  type="button"
+                  className="q-icon-btn"
+                  aria-label={t("forward.remove")}
+                  title={t("forward.remove")}
+                  onClick={() => removeForward(index)}
+                >
+                  <CloseIcon size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <button type="button" className="q-btn text-xs" onClick={addForward}>
+              <PlusIcon size={12} /> {t("forward.add")}
+            </button>
+            <span className="text-xs text-[var(--q-muted)]">{t("forward.hint")}</span>
+          </div>
+        </div>
 
         <div className="col-span-2 mt-2 flex justify-end gap-2">
           <button type="button" className="q-btn" onClick={onClose} disabled={busy}>

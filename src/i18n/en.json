@@ -147,6 +147,17 @@
     "conflictLoad": "Load new version",
     "conflictOverwrite": "Overwrite anyway"
   },
+  "workspaces": {
+    "split": "Split view",
+    "broadcast": "Broadcast input",
+    "banner": "BROADCAST — input goes to all {{count}} connected sessions",
+    "turnOff": "Turn off",
+    "confirmClose": "Turn off broadcast input?",
+    "confirmCloseText": "Input will go to the active terminal only.",
+    "splitHint": "Split view needs at least two terminals. Connect another server.",
+    "broadcastHint": "Broadcast input needs at least two connected terminals.",
+    "restoreHint": "Restored tabs: {{count}}. Some terminals may need manual reconnection."
+  },
   "monitoring": {
     "title": "Server health",
     "selectSession": "Connection",
@@ -178,6 +189,15 @@
     "procCpu": "CPU",
     "procMem": "MEM",
     "noProcesses": "No process data"
+  },
+  "forward": {
+    "title": "Port forwarding",
+    "add": "Add rule",
+    "remove": "Remove",
+    "hint": "local:8080:example.com:80 — local; dynamic:1080 — SOCKS5 proxy; remote:3000:localhost:3000 — remote. Binds 127.0.0.1.",
+    "specPlaceholder": "local:8080:example.com:80",
+    "active": "{{count}} forwards",
+    "failed": "Failed to create forward: {{message}}"
   },
   "settings": {
     "title": "Settings",

@@ -75,7 +75,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## 🗺 Roadmap
 
-- [ ] Port forwarding (local / remote / dynamic SOCKS)
+- [x] Port forwarding (local / remote / dynamic SOCKS)
 - [x] Live server statistics panel (CPU, RAM, disk, network)
 - [x] Built-in remote code editor (CodeMirror 6, atomic writes with mtime checks)
 - [ ] Workspaces, split view and broadcast input

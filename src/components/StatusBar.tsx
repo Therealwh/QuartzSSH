@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { ipc } from "../lib/ipc";
 import { useSessions } from "../store/sessions";
@@ -15,10 +16,38 @@ export function StatusBar() {
   const language = useSettings((s) => s.language);
   const setLanguage = useSettings((s) => s.setLanguage);
   const [version, setVersion] = useState("");
+  const [forwardCount, setForwardCount] = useState(0);
 
   useEffect(() => {
     void ipc.appVersion().then(setVersion).catch(() => undefined);
   }, []);
+
+  // Total number of live forwards across all sessions; refreshed when the
+  // connections change and whenever the backend reports a forward change.
+  const refreshForwards = useCallback(async () => {
+    let total = 0;
+    for (const sessionId of Object.values(connections)) {
+      try {
+        total += (await ipc.forwardList(sessionId)).length;
+      } catch {
+        // Session may be gone; skip it.
+      }
+    }
+    setForwardCount(total);
+  }, [connections]);
+
+  useEffect(() => {
+    void refreshForwards();
+  }, [refreshForwards]);
+
+  useEffect(() => {
+    const unlisten = listen("forward:changed", () => {
+      void refreshForwards();
+    });
+    return () => {
+      void unlisten.then((un) => un());
+    };
+  }, [refreshForwards]);
 
   const count = Object.keys(connections).length;
   const theme = getTheme(themeId);
@@ -29,6 +58,9 @@ export function StatusBar() {
       <span aria-live="polite">
         {count > 0 ? t("status.sessions", { count }) : t("status.noSessions")}
       </span>
+      {forwardCount > 0 && (
+        <span title={t("forward.title")}>{t("forward.active", { count: forwardCount })}</span>
+      )}
       {updateStatus && <span className="text-[var(--q-warning)]">{updateStatus}</span>}
       <span className="ml-auto">{version && `v${version}`}</span>
       <button
