@@ -80,7 +80,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [ ] Built-in remote code editor (Monaco, atomic writes)
 - [ ] Workspaces, split view and broadcast input
 - [ ] FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`)
-- [ ] Optional MCP server for AI agents (off by default)
+- [x] Optional MCP server for AI agents (off by default; [docs/mcp-server.md](docs/mcp-server.md))
 
 ## 🤝 Contributing
 
