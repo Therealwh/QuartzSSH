@@ -103,6 +103,12 @@ export interface LocalListing {
   entries: LocalEntry[];
 }
 
+/** Text file content for the built-in editor, with its server mtime baseline. */
+export interface RemoteFileContent {
+  content: string;
+  mtime: number | null;
+}
+
 export type TransferStatus = "active" | "done" | "failed" | "cancelled";
 
 export interface TransferEvent {

@@ -4,7 +4,10 @@ import type { Profile } from "../types";
 import { ipc } from "../lib/ipc";
 import { useDialogs } from "./dialogs";
 
-export type TabKind = "terminal" | "sftp" | "monitoring" | "settings";
+export type TabKind = "terminal" | "sftp" | "monitoring" | "settings" | "editor";
+
+/** Remote files above this size are refused by the editor (both sides). */
+export const EDITOR_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 export interface Tab {
   id: string;
@@ -15,6 +18,10 @@ export interface Tab {
   sftpId?: string;
   profileId?: string;
   host?: string;
+  /** Editor tabs: absolute remote path of the file being edited. */
+  path?: string;
+  /** Editor tabs: whether the buffer differs from the server copy. */
+  dirty?: boolean;
   /** Terminal tabs: whether the underlying session is gone. */
   disconnected?: boolean;
   busy?: boolean;
@@ -47,6 +54,8 @@ interface SessionsStore {
   reconnectTab: (tabId: string) => Promise<void>;
 
   openSftpForProfile: (profile: Profile) => Promise<void>;
+  openEditorTab: (sftpId: string, path: string) => void;
+  setTabDirty: (tabId: string, dirty: boolean) => void;
   openMonitoringTab: () => void;
   openSettingsTab: () => void;
   setActiveTab: (id: string) => void;
@@ -226,6 +235,26 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     }
   },
 
+  openEditorTab: (sftpId, path) => {
+    const fileName = path.split("/").pop() ?? path;
+    const existing = get().tabs.find(
+      (t) => t.kind === "editor" && t.sftpId === sftpId && t.path === path,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+    const tab: Tab = { id: newTabId(), kind: "editor", title: fileName, sftpId, path };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
+  },
+
+  setTabDirty: (tabId, dirty) =>
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.dirty === dirty) return s;
+      return { tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, dirty } : t)) };
+    }),
+
   openSettingsTab: () => {
     const existing = get().tabs.find((t) => t.kind === "settings");
     if (existing) {
@@ -270,15 +299,26 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         return { connections };
       });
     }
+    // Editor tabs share the SFTP session with the Files tab they were opened
+    // from; closing a Files tab also closes its editor tabs, and the SFTP
+    // session is closed only when no remaining tab still uses it.
+    const removed = new Set<string>([id]);
     if (tab.sftpId) {
+      for (const t of get().tabs) {
+        if (t.kind === "editor" && t.sftpId === tab.sftpId) removed.add(t.id);
+      }
+    }
+    const remaining = get().tabs.filter((t) => !removed.has(t.id));
+    if (tab.sftpId && !remaining.some((t) => t.sftpId === tab.sftpId)) {
       void ipc.sftpClose(tab.sftpId).catch(() => undefined);
     }
-    set((s) => {
-      const tabs = s.tabs.filter((t) => t.id !== id);
-      const activeTabId =
-        s.activeTabId === id ? (tabs[tabs.length - 1]?.id ?? null) : s.activeTabId;
-      return { tabs, activeTabId };
-    });
+    set((s) => ({
+      tabs: remaining,
+      activeTabId:
+        s.activeTabId && removed.has(s.activeTabId)
+          ? (remaining[remaining.length - 1]?.id ?? null)
+          : s.activeTabId,
+    }));
   },
 
   clearConnectError: (tabId) =>
