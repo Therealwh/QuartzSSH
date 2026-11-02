@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { ipc } from "../../lib/ipc";
@@ -13,7 +13,8 @@ import type {
 import { useSettings } from "../../store/settings";
 import { useAutoReconnect, useSessions } from "../../store/sessions";
 import { useDialogs } from "../../store/dialogs";
-import { THEMES } from "../../themes";
+import { DEFAULT_THEME_ID, THEMES, buildCustomTheme, getTheme } from "../../themes";
+import type { CustomThemeDraft, Theme } from "../../themes";
 import { LANGUAGES, type LanguageId } from "../../i18n";
 import { manualCheck } from "../../lib/updater";
 import { Modal } from "../dialogs/Modal";
@@ -29,6 +30,46 @@ const MONO_FONTS = [
   "Fira Code, monospace",
   "Courier New, monospace",
 ];
+
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+type BuilderColorKey =
+  | "uiBg"
+  | "uiPanel"
+  | "uiAccent"
+  | "uiText"
+  | "termBg"
+  | "termFg"
+  | "termCursor"
+  | "termSelection";
+
+const BUILDER_COLORS: { key: BuilderColorKey; label: string }[] = [
+  { key: "uiBg", label: "themeCustom.uiBg" },
+  { key: "uiPanel", label: "themeCustom.uiPanel" },
+  { key: "uiAccent", label: "themeCustom.accent" },
+  { key: "uiText", label: "themeCustom.text" },
+  { key: "termBg", label: "themeCustom.termBg" },
+  { key: "termFg", label: "themeCustom.termFg" },
+  { key: "termCursor", label: "themeCustom.cursor" },
+  { key: "termSelection", label: "themeCustom.selection" },
+];
+
+/** Reset the builder fields from a base theme (keeping the typed name). */
+function draftFromTheme(theme: Theme, keepName = ""): CustomThemeDraft {
+  return {
+    name: keepName,
+    baseId: theme.id,
+    uiBg: theme.ui.bg,
+    uiPanel: theme.ui.panel,
+    uiAccent: theme.ui.accent,
+    uiText: theme.ui.text,
+    termBg: theme.term.bg,
+    termFg: theme.term.fg,
+    termCursor: theme.term.cursor,
+    termSelection: theme.term.selection,
+    ansi: [...theme.term.ansi],
+  };
+}
 
 export function SettingsView() {
   const { t, i18n } = useTranslation();
@@ -63,26 +104,49 @@ export function SettingsView() {
       <Section title={t("settings.appearance")}>
         <Row label={t("settings.theme")}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                className={`rounded-lg border p-2 text-left text-xs ${
-                  ui.themeId === theme.id
-                    ? "border-[var(--q-accent)]"
-                    : "border-[var(--q-border)] hover:border-[var(--q-muted)]"
-                }`}
-                onClick={() => ui.setTheme(theme.id)}
-              >
-                <div className="mb-1 flex gap-1">
-                  {[theme.ui.bg, theme.ui.accent, theme.term.ansi[1], theme.term.ansi[2], theme.term.ansi[4]].map((c, i) => (
-                    <span key={i} className="h-4 w-4 rounded" style={{ background: c }} />
-                  ))}
-                </div>
-                {theme.name}
-              </button>
-            ))}
+            {[...THEMES, ...ui.customThemes].map((theme) => {
+              const isCustom = theme.id.startsWith("custom-");
+              return (
+                <button
+                  key={theme.id}
+                  className={`rounded-lg border p-2 text-left text-xs ${
+                    ui.themeId === theme.id
+                      ? "border-[var(--q-accent)]"
+                      : "border-[var(--q-border)] hover:border-[var(--q-muted)]"
+                  }`}
+                  onClick={() => ui.setTheme(theme.id)}
+                >
+                  <div className="mb-1 flex gap-1">
+                    {[theme.ui.bg, theme.ui.accent, theme.term.ansi[1], theme.term.ansi[2], theme.term.ansi[4]].map((c, i) => (
+                      <span key={i} className="h-4 w-4 rounded" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">{theme.name}</span>
+                    {isCustom && (
+                      <span className="shrink-0 rounded bg-[var(--q-elevated)] px-1 text-[9px] uppercase tracking-wide text-[var(--q-muted)]">
+                        {t("themeCustom.badge")}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </Row>
+        <Row label={t("settings.transparency")} hint={t("settings.transparencyHint")}>
+          <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
+            <input
+              type="range"
+              min={70}
+              max={100}
+              value={Math.round(ui.bgOpacity * 100)}
+              onChange={(e) => ui.setBgOpacity(Number(e.target.value) / 100)}
+            />
+            <span className="w-10 text-center">{Math.round(ui.bgOpacity * 100)}%</span>
+          </label>
+        </Row>
+        <ThemeBuilder />
         <Row label={t("settings.language")}>
           <select
             className="q-input w-40"
@@ -283,6 +347,133 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
         {hint && <div className="text-xs text-[var(--q-muted)]">{hint}</div>}
       </div>
       <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Theme builder (spec 4.2): pick a base, recolor the essentials, save locally.
+// ---------------------------------------------------------------------------
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
+      <input
+        type="color"
+        className="h-7 w-9 shrink-0 cursor-pointer rounded border border-[var(--q-border)] bg-transparent p-0"
+        value={HEX_RE.test(value) ? value : "#000000"}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span className="truncate">{label}</span>
+    </label>
+  );
+}
+
+function ThemeBuilder() {
+  const { t } = useTranslation();
+  const customThemes = useSettings((s) => s.customThemes);
+  const saveCustomTheme = useSettings((s) => s.saveCustomTheme);
+  const setTheme = useSettings((s) => s.setTheme);
+  const deleteCustomTheme = useSettings((s) => s.deleteCustomTheme);
+  const [draft, setDraft] = useState<CustomThemeDraft>(() =>
+    draftFromTheme(getTheme(DEFAULT_THEME_ID)),
+  );
+
+  // The Theme that the current draft produces (id/isDark computed on the fly).
+  const preview = useMemo(() => buildCustomTheme(draft), [draft]);
+  const isSaved = customThemes.some((saved) => saved.id === preview.id);
+
+  return (
+    <div className="space-y-3 rounded-lg border border-[var(--q-border)] p-3">
+      <div className="text-sm">{t("themeCustom.title")}</div>
+      <div className="text-xs text-[var(--q-muted)]">{t("themeCustom.hint")}</div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="q-input w-56"
+          value={draft.baseId}
+          aria-label={t("themeCustom.base")}
+          onChange={(e) =>
+            setDraft((d) => draftFromTheme(getTheme(e.target.value), d.name))
+          }
+        >
+          {THEMES.map((base) => (
+            <option key={base.id} value={base.id}>
+              {base.name}
+            </option>
+          ))}
+        </select>
+        <input
+          className="q-input w-48"
+          value={draft.name}
+          placeholder={t("themeCustom.namePlaceholder")}
+          aria-label={t("themeCustom.name")}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {BUILDER_COLORS.map((field) => (
+          <ColorField
+            key={field.key}
+            label={t(field.label)}
+            value={draft[field.key]}
+            onChange={(v) => setDraft((d) => ({ ...d, [field.key]: v }))}
+          />
+        ))}
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs text-[var(--q-muted)]">{t("themeCustom.ansi")}</div>
+        <div className="grid grid-cols-8 gap-1">
+          {draft.ansi.map((color, i) => (
+            <input
+              key={i}
+              type="color"
+              title={`ANSI ${i}`}
+              className="h-6 w-full cursor-pointer rounded border border-[var(--q-border)] bg-transparent p-0"
+              value={HEX_RE.test(color) ? color : "#000000"}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  ansi: d.ansi.map((c, j) => (j === i ? e.target.value : c)),
+                }))
+              }
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          {[preview.ui.bg, preview.ui.accent, preview.term.ansi[1], preview.term.ansi[2], preview.term.ansi[4]].map((c, i) => (
+            <span key={i} className="h-4 w-4 rounded border border-[var(--q-border)]" style={{ background: c }} />
+          ))}
+          <span className="ml-2 font-mono text-xs text-[var(--q-muted)]">{preview.id}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="q-btn text-xs" onClick={() => saveCustomTheme(preview)}>
+            {t("themeCustom.save")}
+          </button>
+          <button
+            className="q-btn q-btn-primary text-xs"
+            onClick={() => {
+              saveCustomTheme(preview);
+              setTheme(preview.id);
+            }}
+          >
+            {t("themeCustom.apply")}
+          </button>
+          <button
+            className="q-btn q-btn-danger text-xs"
+            disabled={!isSaved}
+            onClick={() => deleteCustomTheme(preview.id)}
+          >
+            {t("themeCustom.delete")}
+          </button>
+          {isSaved && <span className="text-xs text-[var(--q-success)]">{t("themeCustom.saved")}</span>}
+        </div>
+      </div>
     </div>
   );
 }
