@@ -537,11 +537,51 @@ async fn do_download(
     Ok(transferred)
 }
 
-pub async fn read_remote_text(
+// ---------------------------------------------------------------------------
+// Editor read/write (spec section 28: built-in remote code editor)
+// ---------------------------------------------------------------------------
+
+/// Text file content plus the server mtime at read time. The mtime is the
+/// baseline for the optimistic-concurrency check on save.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteFileContent {
+    pub content: String,
+    /// Server mtime in epoch seconds; `None` when the server does not report it.
+    pub mtime: Option<u32>,
+}
+
+/// A NUL byte within the first 8 KiB marks a file as binary (heuristic —
+/// text files may legitimately contain NULs further in, e.g. padding).
+const BINARY_SNIFF_BYTES: usize = 8 * 1024;
+
+fn looks_binary(data: &[u8]) -> bool {
+    let head_len = data.len().min(BINARY_SNIFF_BYTES);
+    data[..head_len].contains(&0)
+}
+
+/// Name of the temporary file used for the atomic write swap.
+fn temp_path(path: &str) -> String {
+    format!("{path}.quartzssh-tmp")
+}
+
+/// Pure optimistic-concurrency check for the editor write path: a conflict
+/// exists only when both mtimes are known and differ. When either side is
+/// unknown there is nothing to compare, so writing is allowed.
+fn check_mtime_conflict(expected: Option<u32>, current: Option<u32>) -> bool {
+    match (expected, current) {
+        (Some(expected), Some(current)) => expected != current,
+        _ => false,
+    }
+}
+
+pub async fn read_remote_file(
     handle: &SftpHandle,
     path: &str,
     max_bytes: u64,
-) -> Result<String, String> {
+) -> Result<RemoteFileContent, String> {
+    // Stat before reading: size guard and mtime baseline must describe the
+    // same snapshot as the content we return.
     let meta = handle
         .sftp
         .metadata(path)
@@ -557,22 +597,139 @@ pub async fn read_remote_text(
         .read(path)
         .await
         .map_err(|e| format!("sftp_read_failed: {e}"))?;
-    if data.contains(&0) {
+    // Guard also when the server does not report the size.
+    if data.len() as u64 > max_bytes {
+        return Err(format!("file_too_large: {} > {max_bytes}", data.len()));
+    }
+    if looks_binary(&data) {
         return Err("binary_file".into());
     }
-    Ok(String::from_utf8_lossy(&data).to_string())
+    Ok(RemoteFileContent {
+        content: String::from_utf8_lossy(&data).to_string(),
+        mtime: meta.mtime,
+    })
 }
 
+pub async fn read_remote_text(
+    handle: &SftpHandle,
+    path: &str,
+    max_bytes: u64,
+) -> Result<String, String> {
+    read_remote_file(handle, path, max_bytes)
+        .await
+        .map(|c| c.content)
+}
+
+/// Writes bytes to a remote path with CREATE|TRUNCATE, so the target is fully
+/// replaced even when the new content is shorter than the old one.
+async fn write_file_bytes(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<(), String> {
+    let mut file = sftp
+        .open_with_flags(
+            path,
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
+        )
+        .await
+        .map_err(|e| format!("sftp_open_failed: {e}"))?;
+    file.write_all(data)
+        .await
+        .map_err(|e| format!("sftp_write_failed: {e}"))?;
+    file.close()
+        .await
+        .map_err(|e| format!("sftp_close_failed: {e}"))?;
+    Ok(())
+}
+
+/// Editor write path (spec section 28.3): optimistic mtime check followed by
+/// an as-atomic-as-possible replacement.
+///
+/// Why write to a temp file and rename instead of writing into the target:
+/// 1. The naive `SftpSession::write` opens the target with WRITE only (no
+///    TRUNCATE), so content shorter than the old file would leave a stale
+///    tail on the server — silent corruption.
+/// 2. Writing to `<path>.quartzssh-tmp` and renaming over the target swaps
+///    the whole file in one step (atomic on servers whose SFTP rename follows
+///    POSIX rename(2) semantics and overwrites the existing target).
+///
+/// Some servers (notably OpenSSH) refuse a plain SSH_FXP_RENAME onto an
+/// existing file unless the client speaks the posix-rename@openssh.com
+/// extension, which russh-sftp does not expose on `SftpSession`. When the
+/// rename fails we fall back to writing the target in place with
+/// CREATE|TRUNCATE: we trade the atomic swap for correctness (no stale
+/// tail); a torn file is then possible only if the connection drops
+/// mid-write, which is the same exposure the plain write always had.
+pub async fn write_remote_text_mtime(
+    handle: &SftpHandle,
+    path: &str,
+    content: &str,
+    expected_mtime: Option<u32>,
+    force: bool,
+) -> Result<(), String> {
+    // Re-stat right before writing: if the file changed on the server since
+    // the editor read it (and the writer is not forcing), refuse — nothing
+    // must be written in that case.
+    let current = handle.sftp.metadata(path).await.ok().and_then(|m| m.mtime);
+    if !force && check_mtime_conflict(expected_mtime, current) {
+        return Err("mtime_conflict".into());
+    }
+
+    let tmp = temp_path(path);
+    if let Err(e) = write_file_bytes(&handle.sftp, &tmp, content.as_bytes()).await {
+        let _ = handle.sftp.remove_file(&tmp).await; // best-effort cleanup
+        return Err(e);
+    }
+    match handle.sftp.rename(&tmp, path).await {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Server does not overwrite on rename — clean the temp file up
+            // and write the target directly.
+            let _ = handle.sftp.remove_file(&tmp).await;
+            write_file_bytes(&handle.sftp, path, content.as_bytes()).await
+        }
+    }
+}
+
+/// Legacy plain write (no mtime check): kept for the existing
+/// sftp_write_text command; the editor uses `write_remote_text_mtime`.
 pub async fn write_remote_text(
     handle: &SftpHandle,
     path: &str,
     content: &str,
 ) -> Result<(), String> {
-    handle
-        .sftp
-        .write(path, content.as_bytes())
-        .await
-        .map_err(|e| format!("sftp_write_failed: {e}"))
+    write_remote_text_mtime(handle, path, content, None, true).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{check_mtime_conflict, looks_binary, temp_path, BINARY_SNIFF_BYTES};
+
+    #[test]
+    fn mtime_conflict_matrix() {
+        // No baseline and/or no server mtime -> nothing to compare, no conflict.
+        assert!(!check_mtime_conflict(None, None));
+        assert!(!check_mtime_conflict(None, Some(7)));
+        assert!(!check_mtime_conflict(Some(5), None));
+        // Same mtime -> ok.
+        assert!(!check_mtime_conflict(Some(5), Some(5)));
+        // File changed on the server since it was read -> conflict.
+        assert!(check_mtime_conflict(Some(5), Some(7)));
+    }
+
+    #[test]
+    fn temp_file_name() {
+        assert_eq!(temp_path("/etc/app.conf"), "/etc/app.conf.quartzssh-tmp");
+        assert_eq!(temp_path("notes.txt"), "notes.txt.quartzssh-tmp");
+    }
+
+    #[test]
+    fn binary_detection_sniffs_only_the_head() {
+        assert!(!looks_binary(b"plain text file"));
+        let mut data = vec![b'a'; BINARY_SNIFF_BYTES + 64];
+        // NUL only beyond the sniff window (e.g. trailing padding) is fine.
+        data[BINARY_SNIFF_BYTES + 10] = 0;
+        assert!(!looks_binary(&data));
+        data[3] = 0;
+        assert!(looks_binary(&data));
+    }
 }
 
 pub async fn close(manager: &SftpManager, id: &str) -> Result<(), String> {

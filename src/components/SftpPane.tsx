@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Tab } from "../store/sessions";
+import { EDITOR_MAX_FILE_BYTES, useSessions } from "../store/sessions";
 import { ipc } from "../lib/ipc";
 import type { DirectoryListing, FileEntry, LocalListing } from "../types";
 import { formatBytes, formatTime, joinPath, parentPath } from "../lib/format";
@@ -39,6 +40,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
   const { t } = useTranslation();
   const requestConfirm = useDialogs((s) => s.requestConfirm);
   const setUpdateStatus = useDialogs((s) => s.setUpdateStatus);
+  const openEditorTab = useSessions((s) => s.openEditorTab);
 
   const [local, setLocal] = useState<PaneState | null>(null);
   const [remote, setRemote] = useState<PaneState | null>(null);
@@ -186,7 +188,20 @@ export function SftpPane({ tab }: { tab: Tab }) {
         key={entry.name}
         className="q-row flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm"
         onClick={() => entry.isDir && navigate(side, entry.path)}
-        onDoubleClick={() => entry.isDir && navigate(side, entry.path)}
+        onDoubleClick={() => {
+          if (entry.isDir) {
+            navigate(side, entry.path);
+            return;
+          }
+          // Double-click on a remote file opens it in the built-in editor.
+          if (side === "remote" && tab.sftpId) {
+            if (entry.size > EDITOR_MAX_FILE_BYTES) {
+              setUpdateStatus(t("errors.file_too_large"));
+              return;
+            }
+            openEditorTab(tab.sftpId, entry.path);
+          }
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, side, entry });

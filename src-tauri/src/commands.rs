@@ -437,6 +437,38 @@ pub async fn sftp_write_text(
     crate::sftp::write_remote_text(&handle, &path, &content).await
 }
 
+/// Reads a text file for the built-in editor: content + server mtime
+/// baseline for the optimistic-concurrency check on save.
+#[tauri::command]
+pub async fn sftp_read_file(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    path: String,
+    max_bytes: Option<u64>,
+) -> Result<crate::sftp::RemoteFileContent, String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
+    crate::sftp::read_remote_file(&handle, &path, max_bytes.unwrap_or(10 * 1024 * 1024)).await
+}
+
+/// Saves editor content. Returns Err("mtime_conflict") without writing when
+/// the file changed on the server since it was read, unless `force` is set.
+#[tauri::command]
+pub async fn sftp_write_file(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    path: String,
+    content: String,
+    expected_mtime: Option<u32>,
+    force: bool,
+) -> Result<(), String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
+    crate::sftp::write_remote_text_mtime(&handle, &path, &content, expected_mtime, force).await
+}
+
 // ---------------------------------------------------------------------------
 // Local filesystem
 // ---------------------------------------------------------------------------

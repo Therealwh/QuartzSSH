@@ -65,6 +65,8 @@ pub fn run() {
             commands::transfer_cancel,
             commands::sftp_read_text,
             commands::sftp_write_text,
+            commands::sftp_read_file,
+            commands::sftp_write_file,
             commands::local_list,
             commands::local_home,
             commands::local_mkdir,

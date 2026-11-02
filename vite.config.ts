@@ -33,9 +33,11 @@ export default defineConfig({
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
     rollupOptions: {
       output: {
-        // xterm.js is heavy and only needed once a terminal is opened
+        // xterm.js and CodeMirror 6 are heavy and only needed once a terminal
+        // or editor is opened — each gets its own lazy chunk.
         manualChunks(id: string) {
           if (id.includes("@xterm")) return "xterm";
+          if (id.includes("@codemirror") || id.includes("@lezer")) return "codemirror";
         },
       },
     },
