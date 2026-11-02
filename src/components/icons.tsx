@@ -160,3 +160,13 @@ export function LockIcon({ size, className }: IconProps) {
     </svg>
   );
 }
+
+export function GaugeIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M2.5 11.5a5.5 5.5 0 0111 0" />
+      <path d="M8 11.5l2.9-3.9" />
+      <circle cx="8" cy="11.5" r="1" />
+    </svg>
+  );
+}

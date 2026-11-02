@@ -6,6 +6,7 @@ use tauri::{AppHandle, State};
 
 use crate::config::{self, AppSettings, Profile, ProfileInput, ProfileStore, SettingsStore};
 use crate::localfs;
+use crate::monitoring::MonitoringManager;
 use crate::sftp::{SftpManager, TransferManager};
 use crate::ssh::known_hosts::{KnownHostEntry, KnownHosts};
 use crate::ssh::{self, HostKeyDecision, PendingHostKeys, SshManager};
@@ -435,6 +436,34 @@ pub async fn sftp_write_text(
         .get(&sftp_id)
         .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::write_remote_text(&handle, &path, &content).await
+}
+
+// ---------------------------------------------------------------------------
+// Monitoring (server health panel)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn monitoring_open(
+    app: AppHandle,
+    ssh: State<'_, SshManager>,
+    monitoring: State<'_, MonitoringManager>,
+    session_id: String,
+) -> Result<(), String> {
+    if ssh.get(&session_id).is_none() {
+        return Err("session_not_found".to_string());
+    }
+    monitoring.ensure_started(app, &session_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn monitoring_close(monitoring: State<MonitoringManager>, session_id: String) {
+    monitoring.stop(&session_id);
+}
+
+#[tauri::command]
+pub fn monitoring_is_open(monitoring: State<MonitoringManager>, session_id: String) -> bool {
+    monitoring.is_running(&session_id)
 }
 
 // ---------------------------------------------------------------------------
