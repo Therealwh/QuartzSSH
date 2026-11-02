@@ -5,6 +5,7 @@ The same shortcuts are used everywhere unless remapped by the user. On macOS
 
 | Action | Windows / Linux | macOS |
 | ------ | --------------- | ----- |
+| New tab | `Ctrl + T` | `⌘ + T` |
 | Close tab | `Ctrl + W` | `⌘ + W` |
 | Search in terminal | `Ctrl + F` | `⌘ + F` |
 | Copy (terminal) | `Ctrl + Shift + C` | `⌘ + C` |
@@ -17,6 +18,9 @@ The same shortcuts are used everywhere unless remapped by the user. On macOS
 
 ## Workspaces notes
 
+- `Ctrl + T` opens a new tab connected to the same profile as the active
+  terminal. A disconnected active tab is reconnected in place; switching the
+  color scheme stays on `Ctrl + Shift + T`.
 - `Ctrl + W` closes the app tab; it is never sent to the remote shell.
 - Turning broadcast input off asks for confirmation, so a stray keypress
   does not cut off the other sessions.
@@ -34,5 +38,4 @@ The same shortcuts are used everywhere unless remapped by the user. On macOS
 
 | Action | Windows / Linux | macOS |
 | ------ | --------------- | ----- |
-| New tab | `Ctrl + T` | `⌘ + T` |
 | Reconnect | `Ctrl + Shift + R` | `⌘ + Shift + R` |

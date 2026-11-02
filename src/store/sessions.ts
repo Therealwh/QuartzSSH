@@ -75,6 +75,8 @@ interface SessionsStore {
   connectProfile: (profile: Profile, secrets?: { password?: string; keyPassphrase?: string }) => Promise<string | null>;
   disconnectTab: (tabId: string) => Promise<void>;
   reconnectTab: (tabId: string) => Promise<void>;
+  /** Ctrl+T (spec 25): open another connection like the active tab. */
+  duplicateActiveSessionTab: () => void;
 
   openSftpForProfile: (profile: Profile) => Promise<void>;
   openEditorTab: (sftpId: string, path: string) => void;
@@ -153,7 +155,9 @@ export const useSessions = create<SessionsStore>((set, get) => ({
           Object.entries(s.connectErrors).filter(([, v]) => v !== result.sessionId),
         ),
       }));
-      // Reuse an existing terminal tab for this profile, otherwise open one.
+      // Reuse only a disconnected terminal tab for this profile (reconnect
+      // in place). A live tab of the same profile is never taken over, so
+      // duplicating the active session (Ctrl+T) always opens a new tab.
       const existing = get().tabs.find(
         (t) => t.kind === "terminal" && t.profileId === profile.id && t.disconnected,
       );
@@ -234,6 +238,20 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, busy: true } : t)),
     }));
     await get().connectProfile(profile);
+  },
+
+  /** Ctrl+T (spec 25): connect the profile of the active terminal tab again.
+   * A live tab is never reused — connectProfile only re-uses a disconnected
+   * tab of the same profile, so a connected session always gets a fresh tab.
+   * A disconnected active tab is reconnected in place; a non-terminal tab
+   * (or one without a profile) is ignored. */
+  duplicateActiveSessionTab: () => {
+    const { tabs, activeTabId, profiles } = get();
+    const active = tabs.find((t) => t.id === activeTabId);
+    if (!active || active.kind !== "terminal" || !active.profileId) return;
+    const profile = profiles.find((p) => p.id === active.profileId);
+    if (!profile) return;
+    void get().connectProfile(profile);
   },
 
   openSftpForProfile: async (profile) => {
