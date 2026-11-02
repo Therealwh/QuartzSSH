@@ -1,0 +1,35 @@
+name: Dependency audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 2"
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    # RustSec advisories for the Rust dependency tree (src-tauri/Cargo.lock).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: RustSec audit
+        uses: rustsec/audit-check@69366f33c96575abad1e0c30f7a4b9a6359846aa # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  npm-audit:
+    # Known vulnerabilities in the npm dependency tree (production deps).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (production, high+)
+        run: npm audit --omit=dev --audit-level=high
