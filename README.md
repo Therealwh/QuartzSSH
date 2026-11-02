@@ -85,7 +85,7 @@ npm run tauri build   # сборка установщика
   libfido2 — в планах
 
 - [x] Опциональный MCP-сервер для интеграции с AI-агентами (выключен по умолчанию; [docs/mcp-server.md](docs/mcp-server.md))
-- [ ] Smoke e2e на tauri-driver (в процессе)
+- [x] Smoke e2e на tauri-driver (WebDriver, CI)
 - [x] Broadcast-вставка (paste) в split-view
 - [ ] E2E-проверка автообновлений после первого релиза
 
