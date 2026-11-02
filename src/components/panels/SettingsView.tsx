@@ -267,6 +267,16 @@ export function SettingsView() {
 
       <McpServerSection backend={backend} saveBackend={saveBackend} />
 
+      <Section title={t("tray.sectionName")}>
+        <Row label={t("tray.closeToTray")} hint={t("tray.hint")}>
+          <input
+            type="checkbox"
+            checked={backend.closeToTray}
+            onChange={(e) => void saveBackend({ ...backend, closeToTray: e.target.checked })}
+          />
+        </Row>
+      </Section>
+
       <Section title={t("settings.updates")}>
         <Row label={t("settings.checkOnStart")}>
           <input

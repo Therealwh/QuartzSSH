@@ -145,6 +145,8 @@ export interface AppSettings {
   reconnectDelaySeconds: number;
   checkUpdatesOnStart: boolean;
   updateCheckIntervalMinutes: number;
+  /** Keep running in the tray when the window is closed (headless MCP). */
+  closeToTray: boolean;
   mcp: McpSettings;
 }
 

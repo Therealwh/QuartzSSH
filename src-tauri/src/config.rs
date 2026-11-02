@@ -212,7 +212,7 @@ fn default_mcp_port() -> u16 {
     47215
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub host_key_mode: HostKeyMode,
@@ -222,6 +222,10 @@ pub struct AppSettings {
     pub reconnect_delay_seconds: u32,
     pub check_updates_on_start: bool,
     pub update_check_interval_minutes: u32,
+    /// Keep the app running in the background (tray icon) when the window is
+    /// closed. Required for the headless MCP server and active SSH sessions.
+    #[serde(default)]
+    pub close_to_tray: bool,
     /// Optional MCP bridge; disabled by default.
     #[serde(default)]
     pub mcp: McpSettings,
@@ -236,6 +240,7 @@ impl Default for AppSettings {
             reconnect_delay_seconds: 5,
             check_updates_on_start: true,
             update_check_interval_minutes: 12 * 60,
+            close_to_tray: false,
             mcp: McpSettings::default(),
         }
     }
@@ -327,4 +332,57 @@ pub fn load_key_passphrase(profile_id: &str) -> Result<Option<String>, String> {
 
 pub fn drop_key_passphrase(profile_id: &str) -> Result<(), String> {
     delete_secret(&secret_account(profile_id, "keypass"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn close_to_tray_defaults_to_false() {
+        let settings = AppSettings::default();
+        assert!(!settings.close_to_tray);
+    }
+
+    #[test]
+    fn close_to_tray_missing_in_json_defaults_to_false() {
+        // Backward compatibility: settings.json written before close_to_tray
+        // existed must still load, with the background mode off.
+        let json = r#"{
+            "hostKeyMode": "strict",
+            "preferPqKex": true,
+            "autoReconnect": true,
+            "reconnectDelaySeconds": 5,
+            "checkUpdatesOnStart": true,
+            "updateCheckIntervalMinutes": 720
+        }"#;
+        let settings: AppSettings = serde_json::from_str(json).expect("legacy settings parse");
+        assert!(!settings.close_to_tray);
+    }
+
+    #[test]
+    fn settings_with_close_to_tray_and_mcp_serde_roundtrip() {
+        let settings = AppSettings {
+            close_to_tray: true,
+            mcp: McpSettings {
+                enabled: true,
+                port: 47300,
+                allowlist_profile_ids: vec!["prof-1".into(), "prof-2".into()],
+                confirmation_mode: McpConfirmationMode::Never,
+            },
+            ..AppSettings::default()
+        };
+
+        let json = serde_json::to_string(&settings).expect("serialize");
+        // camelCase naming for the new field, as for the rest of the struct.
+        assert!(
+            json.contains("\"closeToTray\":true"),
+            "expected closeToTray key in {json}"
+        );
+
+        let back: AppSettings = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back, settings);
+        assert!(back.close_to_tray);
+        assert_eq!(back.mcp, settings.mcp);
+    }
 }
