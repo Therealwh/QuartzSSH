@@ -13,6 +13,7 @@ export function TabBar() {
     <div
       className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-[var(--q-border)] bg-[var(--q-panel)]"
       role="tablist"
+      data-testid="tab-bar"
     >
       {tabs.map((tab) => {
         const active = tab.id === activeTabId;
