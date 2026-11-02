@@ -128,11 +128,19 @@ impl HostKeyGate {
     }
 }
 
+/// Latest negotiated key-exchange algorithm name of a session, shared
+/// between the connection handler (which learns it during the handshake)
+/// and the session record. `None` until the first key exchange completes.
+pub type KexSlot = Arc<Mutex<Option<String>>>;
+
 pub struct ClientHandler {
     gate: Arc<HostKeyGate>,
     /// Receives `forwarded-tcpip` channels while a remote forward (`-R`) is
     /// active; the slot stays empty otherwise.
     pub remote_slot: RemoteForwardSlot,
+    /// Written on every completed key exchange (initial handshake and
+    /// rekeys); read by the UI via `ssh_kex_info` / `ssh:connected`.
+    pub kex_slot: KexSlot,
 }
 
 /// A `forwarded-tcpip` channel opened by the server for one of our remote
@@ -160,6 +168,19 @@ impl client::Handler for ClientHandler {
             }
         };
         self.gate.verify(key).await
+    }
+
+    async fn kex_done(
+        &mut self,
+        _shared_secret: Option<&[u8]>,
+        names: &russh::Names,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        // The negotiated KEX name (e.g. "mlkem768x25519-sha256") is recorded
+        // for the status-bar post-quantum indicator. Rekeys overwrite the
+        // slot, so it always reflects the algorithm currently in use.
+        *self.kex_slot.lock().unwrap() = Some(names.kex.as_ref().to_string());
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -209,6 +230,9 @@ pub struct SshSession {
     pub handle: Arc<Handle<ClientHandler>>,
     pub input_tx: tokio::sync::mpsc::Sender<SshInput>,
     pub closed: Arc<AtomicBool>,
+    /// Negotiated KEX algorithm name (`mlkem768x25519-sha256`,
+    /// `curve25519-sha256`, …); `None` before the handshake completes.
+    pub kex: KexSlot,
     /// Routing slot for server-opened `forwarded-tcpip` channels (remote
     /// forwarding); empty unless a `-R` forward is active on this session.
     pub remote_slot: RemoteForwardSlot,
@@ -227,6 +251,14 @@ struct SshDataEvent {
 struct SshClosedEvent {
     session_id: String,
     reason: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SshConnectedEvent {
+    session_id: String,
+    /// Negotiated key-exchange algorithm, e.g. `mlkem768x25519-sha256`.
+    kex: Option<String>,
 }
 
 pub struct SshManager {
@@ -367,9 +399,11 @@ pub async fn connect(
     };
 
     let remote_slot: RemoteForwardSlot = Arc::new(Mutex::new(None));
+    let kex_slot: KexSlot = Arc::new(Mutex::new(None));
     let handler = ClientHandler {
         gate,
         remote_slot: remote_slot.clone(),
+        kex_slot: kex_slot.clone(),
     };
     let connect_fut = client::connect(Arc::new(client_config), (host.as_str(), port), handler);
     let mut session_handle = match tokio::time::timeout(Duration::from_secs(30), connect_fut).await
@@ -494,8 +528,20 @@ pub async fn connect(
             input_tx,
             closed,
             remote_slot,
+            kex: kex_slot.clone(),
         })
         .await;
+
+    // The key exchange always completes before authentication, so the slot
+    // is filled by now; `None` is kept for honesty instead of a guess.
+    let kex = kex_slot.lock().unwrap().clone();
+    let _ = app.emit(
+        "ssh:connected",
+        &SshConnectedEvent {
+            session_id: session_id.clone(),
+            kex,
+        },
+    );
 
     Ok(ConnectResult {
         session_id,
@@ -700,6 +746,16 @@ pub async fn exec(
         }
     }
     Ok((exit_code, String::from_utf8_lossy(&output).to_string()))
+}
+
+/// Negotiated key-exchange algorithm of a live session, for the status-bar
+/// post-quantum indicator. `None` while the handshake is still in flight.
+pub fn kex(manager: &SshManager, session_id: &str) -> Result<Option<String>, String> {
+    let session = manager
+        .get(session_id)
+        .ok_or_else(|| "session_not_found".to_string())?;
+    let kex = session.kex.lock().unwrap().clone();
+    Ok(kex)
 }
 
 pub fn write(manager: &SshManager, session_id: &str, bytes: Vec<u8>) -> Result<(), String> {

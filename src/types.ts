@@ -46,6 +46,14 @@ export interface SessionInfo {
   connected: boolean;
 }
 
+/// Payload of the `ssh:connected` event raised after a successful connect.
+export interface SshConnectedEvent {
+  sessionId: string;
+  /// Negotiated key-exchange algorithm, e.g. `mlkem768x25519-sha256`.
+  /// Null while unknown (handshake not finished).
+  kex: string | null;
+}
+
 export type HostKeyStatus = "new" | "changed";
 
 export interface HostKeyPrompt {

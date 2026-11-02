@@ -181,6 +181,13 @@ pub fn ssh_sessions(ssh: State<SshManager>) -> Vec<ssh::SessionInfo> {
     ssh.info()
 }
 
+/// Negotiated key-exchange algorithm of a live session (for the status-bar
+/// post-quantum indicator). `None` while the handshake is still in flight.
+#[tauri::command]
+pub fn ssh_kex_info(ssh: State<SshManager>, session_id: String) -> Result<Option<String>, String> {
+    ssh::kex(&ssh, &session_id)
+}
+
 /// Classify a key file (standard OpenSSH / PuTTY / FIDO2 hardware) for UI badges.
 #[tauri::command]
 pub fn key_inspect(path: String) -> Result<ssh::KeyFileInfo, String> {

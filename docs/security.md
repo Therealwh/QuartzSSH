@@ -39,6 +39,16 @@ server supports it (OpenSSH 9.9+ with post-quantum KEX). The classical
 exchange is not a single point of failure: a failure or absence of ML-KEM on
 either side degrades to the classical path instead of dropping the connection.
 
+**How to see which KEX actually protects a connection.** russh reports the
+negotiated algorithms in its `client::Handler::kex_done` callback; QuartzSSH
+records the name there and surfaces it in the status bar: a green
+`PQ: mlkem768x25519-sha256` badge when every active session negotiated the
+post-quantum hybrid, and a neutral `Classic: …` badge (with the concrete
+algorithm name) when at least one session fell back to a classical KEX —
+that is the visible sign the server did not offer post-quantum key exchange.
+The tooltip explains the classification; the same value is available to
+integrations via the `ssh:connected` event and the `ssh_kex_info` command.
+
 ### FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`, `sk-ecdsa-sha2-nistp256@openssh.com`)
 
 Status, honestly stated:

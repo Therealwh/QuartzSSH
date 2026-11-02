@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import type { HostKeyPrompt, TransferEvent } from "../types";
+import type { HostKeyPrompt, SshConnectedEvent, TransferEvent } from "../types";
 import { useDialogs } from "../store/dialogs";
 import { useTransfers } from "../store/transfers";
 import { useSessions } from "../store/sessions";
@@ -18,6 +18,10 @@ export function setupGlobalListeners(): Array<() => void> {
 
   void listen<{ sessionId: string }>("ssh:closed", (e) => {
     useSessions.getState().markClosed(e.payload.sessionId);
+  }).then((un) => unlisteners.push(un));
+
+  void listen<SshConnectedEvent>("ssh:connected", (e) => {
+    if (e.payload.kex) useSessions.getState().setSessionKex(e.payload.sessionId, e.payload.kex);
   }).then((un) => unlisteners.push(un));
 
   return unlisteners;

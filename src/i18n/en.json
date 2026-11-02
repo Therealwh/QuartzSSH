@@ -317,6 +317,12 @@
     "theme": "Theme",
     "language": "Language"
   },
+  "pq": {
+    "badgePq": "PQ: {{kex}}",
+    "badgeClassic": "Classic: {{kex}}",
+    "tooltipPq": "The connection is protected by the post-quantum hybrid key exchange {{kex}} (ML-KEM-768 + X25519).",
+    "tooltipClassic": "At least one active connection uses the classical key exchange {{kex}}: the server did not offer a post-quantum KEX."
+  },
   "sshConfigSync": {
     "title": "~/.ssh/config changed",
     "changed": "The configuration file was modified outside QuartzSSH. Comparison against the last review:",

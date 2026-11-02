@@ -37,7 +37,8 @@ strict security defaults and fully open source.
   keys are rejected with a diagnostic dialog, passwords live only in the OS
   credential store
 - **Post-quantum key exchange**: `mlkem768x25519-sha256` is used when the
-  server supports it (OpenSSH 9.9+)
+  server supports it (OpenSSH 9.9+); the actually negotiated KEX is shown
+  in the status bar ("PQ" / "Classic" badge)
 - **`~/.ssh/config` import** with a preview and clear warnings, plus export
 - **7 color schemes** — Catppuccin Mocha, Dracula, Nord, Tokyo Night,
   Solarized Dark, Gruvbox Dark, One Dark — applied to the UI and the terminal
