@@ -53,6 +53,13 @@
     "cancel": "Отмена",
     "connectAndSave": "Подключиться и сохранить"
   },
+  "fido2": {
+    "badgeHardware": "Аппаратный ключ FIDO2 ({{algorithm}})",
+    "badgePutty": "Ключ PuTTY",
+    "badgeStandard": "Стандартный ключ OpenSSH",
+    "touchHint": "При подключении потребуется физическое касание ключа (user presence) и, если настроен, ввод PIN-кода.",
+    "libfido2Hint": "Подпись аппаратным ключом требует интеграции libfido2 (в планах): сейчас подключение вернёт понятную ошибку вместо попытки аутентификации."
+  },
   "prompt": {
     "passwordTitle": "Пароль для {{host}}",
     "passwordPlaceholder": "Пароль",

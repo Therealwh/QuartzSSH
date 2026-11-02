@@ -60,6 +60,12 @@ export interface HostKeyPrompt {
 
 export type HostKeyDecision = "accept" | "acceptRemember" | "reject";
 
+/// Classification of a key file, mirroring `ssh::KeyFileInfo` on the backend.
+export type KeyFileInfo =
+  | { kind: "standard" }
+  | { kind: "putty" }
+  | { kind: "hardwareFido2"; algorithm: string };
+
 export interface KnownHostEntry {
   host: string;
   port: number;
