@@ -125,3 +125,34 @@ export interface AppSettings {
   checkUpdatesOnStart: boolean;
   updateCheckIntervalMinutes: number;
 }
+
+// Monitoring (server health panel)
+
+export interface DiskUsage {
+  mount: string;
+  used: number;
+  total: number;
+}
+
+export interface ProcInfo {
+  name: string;
+  cpuPercent: number;
+  memPercent: number;
+}
+
+export interface SystemStats {
+  /** Null until two consecutive samples exist to diff. */
+  cpuPercent: number | null;
+  load: number[];
+  memUsed: number;
+  memTotal: number;
+  swapUsed: number;
+  swapTotal: number;
+  disks: DiskUsage[];
+  netRxBps: number;
+  netTxBps: number;
+  uptimeSecs: number;
+  osName: string;
+  kernel: string;
+  top: ProcInfo[];
+}

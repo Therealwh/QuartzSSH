@@ -7,6 +7,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TerminalPane } from "./components/TerminalPane";
 import { SftpPane } from "./components/SftpPane";
 import { SettingsView } from "./components/panels/SettingsView";
+import { MonitoringPanel } from "./components/panels/MonitoringPanel";
 import { TransfersBar } from "./components/TransfersBar";
 import { HostKeyDialog } from "./components/dialogs/HostKeyDialog";
 import { PasswordDialog } from "./components/dialogs/PasswordDialog";
@@ -41,6 +42,7 @@ export default function App() {
           <div className="relative min-h-0 flex-1">
             {activeTab?.kind === "terminal" && <TerminalPane key={activeTab.id} tab={activeTab} />}
             {activeTab?.kind === "sftp" && <SftpPane key={activeTab.id} tab={activeTab} />}
+            {activeTab?.kind === "monitoring" && <MonitoringPanel />}
             {activeTab?.kind === "settings" && <SettingsView />}
             {!activeTab && <Welcome />}
           </div>
