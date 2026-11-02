@@ -263,14 +263,173 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME_ID = "catppuccin-mocha";
 
-export function getTheme(id: string): Theme {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0];
+// ---------------------------------------------------------------------------
+// Color helpers (pure functions, unit-tested in tests/customTheme.test.ts)
+// ---------------------------------------------------------------------------
+
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
 }
 
-export function xtermThemeOf(theme: Theme) {
+function parseHex(color: string): Rgb | null {
+  let hex = color.trim();
+  if (hex.startsWith("#")) hex = hex.slice(1);
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+  const num = parseInt(hex, 16);
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+/** WCAG relative luminance of a hex color (0 = black, 1 = white). */
+export function luminanceOf(color: string): number {
+  const rgb = parseHex(color);
+  if (!rgb) return 0;
+  const channel = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+}
+
+/** A background counts as dark when its relative luminance is below the midpoint. */
+export function isDarkColor(color: string): boolean {
+  return luminanceOf(color) < 0.5;
+}
+
+/** "#RRGGBB" + opacity → rgba(); at full opacity the hex is kept as-is. */
+export function withAlpha(color: string, opacity: number): string {
+  if (opacity >= 1) return color;
+  const rgb = parseHex(color);
+  if (!rgb) return color;
+  const alpha = Number(Math.min(1, Math.max(0, opacity)).toFixed(3));
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+/** URL/id-safe slug: "My Cool Theme!" → "my-cool-theme"; fallback "theme". */
+export function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .normalize("NFKD")
+    // Combining marks (\p{M}) are kept so accents survive (NFC re-composes them).
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .normalize("NFC");
+  return slug.length > 0 ? slug : "theme";
+}
+
+// ---------------------------------------------------------------------------
+// Custom (user-defined) themes
+// ---------------------------------------------------------------------------
+
+/** Structurally validates an untrusted value (localStorage may be hand-edited). */
+export function isValidTheme(value: unknown): value is Theme {
+  if (typeof value !== "object" || value === null) return false;
+  const t = value as Theme;
+  return (
+    typeof t.id === "string" &&
+    t.id.length > 0 &&
+    typeof t.name === "string" &&
+    typeof t.isDark === "boolean" &&
+    typeof t.ui === "object" &&
+    t.ui !== null &&
+    typeof t.term === "object" &&
+    t.term !== null &&
+    Array.isArray(t.term.ansi) &&
+    t.term.ansi.length === 16
+  );
+}
+
+// Custom themes live in the settings store, but getTheme() may be called before
+// the store module is initialized (or from modules that must not import it).
+// The store therefore pushes its persisted list into this registry at startup
+// and on every change; an empty registry simply falls back to built-ins.
+let customThemes: Theme[] = [];
+
+/** Replace the resolvable set of user-defined themes (no-op for invalid input). */
+export function registerCustomThemes(themes: Theme[]) {
+  customThemes = Array.isArray(themes) ? themes.filter(isValidTheme) : [];
+}
+
+export function getCustomThemes(): readonly Theme[] {
+  return customThemes;
+}
+
+/** All themes available for the picker: built-ins first, then custom ones. */
+export function allThemes(): Theme[] {
+  return [...THEMES, ...customThemes];
+}
+
+export function getTheme(id: string): Theme {
+  return THEMES.find((t) => t.id === id) ?? customThemes.find((t) => t.id === id) ?? THEMES[0];
+}
+
+/** Fields the theme builder edits directly; everything else is inherited. */
+export interface CustomThemeDraft {
+  name: string;
+  baseId: string;
+  uiBg: string;
+  uiPanel: string;
+  uiAccent: string;
+  uiText: string;
+  termBg: string;
+  termFg: string;
+  termCursor: string;
+  termSelection: string;
+  /** 16 ANSI colors; a short list is padded from the base theme. */
+  ansi: string[];
+}
+
+/** Build a full Theme out of the builder fields (id: custom-<slug>). */
+export function buildCustomTheme(draft: CustomThemeDraft): Theme {
+  const base = getTheme(draft.baseId);
+  const name = draft.name.trim() || base.name;
+  const ansi = Array.isArray(draft.ansi) ? draft.ansi.slice(0, 16) : [];
+  while (ansi.length < 16) ansi.push(base.term.ansi[ansi.length]);
+  return {
+    id: `custom-${slugify(name)}`,
+    name,
+    isDark: isDarkColor(draft.uiBg),
+    ui: {
+      ...base.ui,
+      bg: draft.uiBg,
+      panel: draft.uiPanel,
+      accent: draft.uiAccent,
+      text: draft.uiText,
+    },
+    term: {
+      bg: draft.termBg,
+      fg: draft.termFg,
+      cursor: draft.termCursor,
+      selection: draft.termSelection,
+      ansi,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Terminal background opacity (spec 4.3)
+// ---------------------------------------------------------------------------
+
+// Kept here (not in the store) so xtermThemeOf can be called from anywhere
+// without a circular import; the settings store pushes the persisted value.
+let terminalBgOpacity = 1;
+
+/** Clamp to the supported 70–100% range and remember it for xterm themes. */
+export function setTerminalBgOpacity(opacity: number) {
+  const value = typeof opacity === "number" && Number.isFinite(opacity) ? opacity : 1;
+  terminalBgOpacity = Math.min(1, Math.max(0.7, value));
+}
+
+export function terminalBgOpacityOf(): number {
+  return terminalBgOpacity;
+}
+
+export function xtermThemeOf(theme: Theme, bgOpacity: number = terminalBgOpacity) {
   const [black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite] = theme.term.ansi;
   return {
-    background: theme.term.bg,
+    background: withAlpha(theme.term.bg, bgOpacity),
     foreground: theme.term.fg,
     cursor: theme.term.cursor,
     cursorAccent: theme.term.bg,
@@ -294,11 +453,17 @@ export function xtermThemeOf(theme: Theme) {
   };
 }
 
-export function applyThemeToDom(theme: Theme) {
+/**
+ * Push the theme into the CSS variables. bgOpacity < 1 blends --q-bg with the
+ * backdrop (hex → rgba); it also becomes the terminal background opacity, so
+ * xterm and the UI stay in sync. Default 1 = fully opaque.
+ */
+export function applyThemeToDom(theme: Theme, bgOpacity = 1) {
   const root = document.documentElement;
   const ui = theme.ui;
+  setTerminalBgOpacity(bgOpacity);
   const vars: Record<string, string> = {
-    "--q-bg": ui.bg,
+    "--q-bg": withAlpha(ui.bg, bgOpacity),
     "--q-panel": ui.panel,
     "--q-elevated": ui.elevated,
     "--q-hover": ui.hover,
