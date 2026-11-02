@@ -12,8 +12,8 @@
 [![Release](https://img.shields.io/github/v/release/Therealwh/QuartzSSH?include_prereleases)](https://github.com/Therealwh/QuartzSSH/releases/latest)
 [![CI](https://github.com/Therealwh/QuartzSSH/actions/workflows/ci.yml/badge.svg)](https://github.com/Therealwh/QuartzSSH/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Therealwh/QuartzSSH/badge)](https://scorecard.dev/viewer/?uri=github.com/Therealwh/QuartzSSH)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#установка)
-[![i18n](https://img.shields.io/badge/i18n-RU%20%7C%20EN-green)](#локализация)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#-установка)
+[![i18n](https://img.shields.io/badge/i18n-RU%20%7C%20EN-green)](#-возможности)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Made with Tauri](https://img.shields.io/badge/made%20with-Tauri-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app)
 
@@ -78,11 +78,15 @@ npm run tauri build   # сборка установщика
 - [x] Порт-форвардинг (local / remote / dynamic SOCKS)
 - [x] Панель живой статистики сервера (CPU, RAM, диск, сеть)
 - [x] Встроенный редактор кода для файлов на сервере (CodeMirror 6, атомарная запись с проверкой mtime)
-- [ ] Workspaces, split-view и broadcast-ввод
+- [x] Workspaces, split-view и broadcast-ввод
 - [x] Аппаратные ключи FIDO2 (`sk-ssh-ed25519@openssh.com`) — частично:
   детекция и профильная поддержка готовы, user-presence подпись через
   libfido2 — в планах
+
 - [x] Опциональный MCP-сервер для интеграции с AI-агентами (выключен по умолчанию; [docs/mcp-server.md](docs/mcp-server.md))
+- [ ] Smoke e2e на tauri-driver (в процессе)
+- [ ] Broadcast-вставка (paste) в split-view
+- [ ] E2E-проверка автообновлений после первого релиза
 
 
 ## 🤝 Участие
