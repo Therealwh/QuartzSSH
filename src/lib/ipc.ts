@@ -48,6 +48,8 @@ export const ipc = {
   sshExec: (sessionId: string, command: string) =>
     invoke<[number, string]>("ssh_exec", { sessionId, command }),
   sshSessions: () => invoke<SessionInfo[]>("ssh_sessions"),
+  /// Negotiated KEX algorithm of a live session (null until known).
+  sshKexInfo: (sessionId: string) => invoke<string | null>("ssh_kex_info", { sessionId }),
   keyInspect: (path: string) => invoke<KeyFileInfo>("key_inspect", { path }),
   hostKeyRespond: (ticket: string, decision: HostKeyDecision) =>
     invoke<void>("host_key_respond", { answer: { ticket, decision } }),

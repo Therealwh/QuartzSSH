@@ -59,6 +59,8 @@ interface SessionsStore {
   connections: Record<string, string>;
   connectErrors: Record<string, string>;
   sftpOpenByProfile: Record<string, string>;
+  /** sessionId -> negotiated KEX algorithm (status-bar PQ indicator). */
+  kexBySession: Record<string, string>;
   /** Split view: show up to 4 terminals in a 2x2 grid. */
   splitView: boolean;
   /** Broadcast input: keystrokes go to every connected terminal. */
@@ -90,6 +92,8 @@ interface SessionsStore {
   closeTab: (id: string) => Promise<void>;
   clearConnectError: (tabId: string) => void;
   markClosed: (sessionId: string) => void;
+  /** Record the negotiated KEX algorithm of a session (PQ indicator). */
+  setSessionKex: (sessionId: string, kex: string) => void;
 }
 
 function newTabId() {
@@ -110,6 +114,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
   connections: {},
   connectErrors: {},
   sftpOpenByProfile: {},
+  kexBySession: {},
   splitView: false,
   broadcastMode: false,
 
@@ -407,10 +412,12 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       }
       set((s) => {
         const connections = { ...s.connections };
+        const kexBySession = { ...s.kexBySession };
         for (const [pid, sid] of Object.entries(connections)) {
           if (sid === tab.sessionId) delete connections[pid];
         }
-        return { connections };
+        if (tab.sessionId) delete kexBySession[tab.sessionId];
+        return { connections, kexBySession };
       });
     }
     // Editor tabs share the SFTP session with the Files tab they were opened
@@ -447,6 +454,9 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       tabs: s.tabs.map((t) =>
         t.sessionId === sessionId && t.kind === "terminal" ? { ...t, disconnected: true } : t,
       ),
+      kexBySession: Object.fromEntries(
+        Object.entries(s.kexBySession).filter(([id]) => id !== sessionId),
+      ),
     }));
     const ar = useAutoReconnect.getState();
     if (!ar.enabled) return;
@@ -465,6 +475,15 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       if (stillDisconnected) void get().reconnectTab(tab!.id);
     }, delay);
   },
+
+  /** Record the negotiated KEX algorithm of a session (status-bar PQ
+   * indicator); no-op when the value did not change. */
+  setSessionKex: (sessionId, kex) =>
+    set((s) =>
+      s.kexBySession[sessionId] === kex
+        ? s
+        : { kexBySession: { ...s.kexBySession, [sessionId]: kex } },
+    ),
 }));
 
 // Auto-reconnect preferences come from the Rust-side settings; a tiny store

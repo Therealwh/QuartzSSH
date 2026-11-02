@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { ipc } from "../lib/ipc";
+import { selectKexBadge } from "../lib/kex";
 import { useSessions } from "../store/sessions";
 import { useDialogs } from "../store/dialogs";
 import { useSettings } from "../store/settings";
@@ -10,6 +11,8 @@ import { THEMES, getTheme } from "../themes";
 export function StatusBar() {
   const { t, i18n } = useTranslation();
   const connections = useSessions((s) => s.connections);
+  const kexBySession = useSessions((s) => s.kexBySession);
+  const setSessionKex = useSessions((s) => s.setSessionKex);
   const updateStatus = useDialogs((s) => s.updateStatus);
   const themeId = useSettings((s) => s.themeId);
   const setTheme = useSettings((s) => s.setTheme);
@@ -21,6 +24,21 @@ export function StatusBar() {
   useEffect(() => {
     void ipc.appVersion().then(setVersion).catch(() => undefined);
   }, []);
+
+  // Negotiated KEX of every live session, for the post-quantum badge
+  // (29.3). The `ssh:connected` event fills most of these; this fetch is a
+  // fallback for sessions whose event was missed.
+  useEffect(() => {
+    for (const sessionId of Object.values(connections)) {
+      if (kexBySession[sessionId] !== undefined) continue;
+      void ipc
+        .sshKexInfo(sessionId)
+        .then((kex) => {
+          if (kex) setSessionKex(sessionId, kex);
+        })
+        .catch(() => undefined);
+    }
+  }, [connections, kexBySession, setSessionKex]);
 
   // Total number of live forwards across all sessions; refreshed when the
   // connections change and whenever the backend reports a forward change.
@@ -50,6 +68,9 @@ export function StatusBar() {
   }, [refreshForwards]);
 
   const count = Object.keys(connections).length;
+  // PQ only when every active session negotiated a post-quantum KEX; one
+  // classical session switches the badge to the conservative "Classic".
+  const kexBadge = selectKexBadge(Object.values(connections).map((id) => kexBySession[id]));
   const theme = getTheme(themeId);
   const nextTheme = THEMES[(THEMES.findIndex((x) => x.id === themeId) + 1) % THEMES.length];
 
@@ -58,6 +79,23 @@ export function StatusBar() {
       <span aria-live="polite">
         {count > 0 ? t("status.sessions", { count }) : t("status.noSessions")}
       </span>
+      {kexBadge && (
+        <span
+          data-testid="statusbar-kex"
+          className={
+            kexBadge.kind === "pq" ? "text-[var(--q-success)]" : "text-[var(--q-muted)]"
+          }
+          title={
+            kexBadge.kind === "pq"
+              ? t("pq.tooltipPq", { kex: kexBadge.kex })
+              : t("pq.tooltipClassic", { kex: kexBadge.kex })
+          }
+        >
+          {kexBadge.kind === "pq"
+            ? t("pq.badgePq", { kex: kexBadge.kex })
+            : t("pq.badgeClassic", { kex: kexBadge.kex })}
+        </span>
+      )}
       {forwardCount > 0 && (
         <span title={t("forward.title")}>{t("forward.active", { count: forwardCount })}</span>
       )}
