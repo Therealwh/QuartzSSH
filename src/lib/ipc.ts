@@ -5,6 +5,7 @@ import type {
   DirectoryListing,
   FileEntry,
   HostKeyDecision,
+  KeyFileInfo,
   KnownHostEntry,
   LocalListing,
   Profile,
@@ -42,6 +43,7 @@ export const ipc = {
   sshExec: (sessionId: string, command: string) =>
     invoke<[number, string]>("ssh_exec", { sessionId, command }),
   sshSessions: () => invoke<SessionInfo[]>("ssh_sessions"),
+  keyInspect: (path: string) => invoke<KeyFileInfo>("key_inspect", { path }),
   hostKeyRespond: (ticket: string, decision: HostKeyDecision) =>
     invoke<void>("host_key_respond", { answer: { ticket, decision } }),
 

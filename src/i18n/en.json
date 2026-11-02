@@ -53,6 +53,13 @@
     "cancel": "Cancel",
     "connectAndSave": "Connect and save"
   },
+  "fido2": {
+    "badgeHardware": "FIDO2 hardware key ({{algorithm}})",
+    "badgePutty": "PuTTY key",
+    "badgeStandard": "Standard OpenSSH key",
+    "touchHint": "Connecting will require a physical touch of the key (user presence) and, if configured, the PIN.",
+    "libfido2Hint": "Hardware key signing requires libfido2 integration (planned): for now the connection returns a clear error instead of attempting authentication."
+  },
   "prompt": {
     "passwordTitle": "Password for {{host}}",
     "passwordPlaceholder": "Password",
