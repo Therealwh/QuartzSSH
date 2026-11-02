@@ -271,6 +271,49 @@ pub fn ssh_config_import() -> Result<SshConfigImportResult, String> {
     })
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigStatus {
+    pub exists: bool,
+    /// File mtime in epoch seconds; 0 when the file is absent.
+    pub mtime: i64,
+    /// SHA-256 of the file content, hex-encoded; empty when absent.
+    pub hash: String,
+}
+
+/// Snapshot of the user's ~/.ssh/config used by the frontend to detect
+/// external modifications (spec 18.3: never overwrite silently).
+#[tauri::command]
+pub fn ssh_config_status() -> Result<SshConfigStatus, String> {
+    use sha2::{Digest, Sha256};
+    let path = dirs::home_dir()
+        .ok_or_else(|| "cannot_resolve_home".to_string())?
+        .join(".ssh")
+        .join("config");
+    if !path.exists() {
+        return Ok(SshConfigStatus {
+            exists: false,
+            mtime: 0,
+            hash: String::new(),
+        });
+    }
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let digest = Sha256::digest(&data);
+    let hash: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    Ok(SshConfigStatus {
+        exists: true,
+        mtime,
+        hash,
+    })
+}
+
 #[tauri::command]
 pub fn ssh_config_export(
     profiles: State<ProfileStore>,

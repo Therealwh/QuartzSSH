@@ -61,6 +61,8 @@ export const ipc = {
   // ssh_config
   sshConfigImport: () => invoke<SshConfigImportResult>("ssh_config_import"),
   sshConfigExport: (ids: string[]) => invoke<string>("ssh_config_export", { ids }),
+  sshConfigStatus: () =>
+    invoke<{ exists: boolean; mtime: number; hash: string }>("ssh_config_status"),
 
   // SFTP
   sftpOpen: (sessionId: string) => invoke<string>("sftp_open", { sessionId }),
