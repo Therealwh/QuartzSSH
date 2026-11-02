@@ -162,6 +162,15 @@
     "procMem": "MEM",
     "noProcesses": "No process data"
   },
+  "forward": {
+    "title": "Port forwarding",
+    "add": "Add rule",
+    "remove": "Remove",
+    "hint": "local:8080:example.com:80 — local; dynamic:1080 — SOCKS5 proxy; remote:3000:localhost:3000 — remote. Binds 127.0.0.1.",
+    "specPlaceholder": "local:8080:example.com:80",
+    "active": "{{count}} forwards",
+    "failed": "Failed to create forward: {{message}}"
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",
