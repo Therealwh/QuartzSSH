@@ -37,6 +37,10 @@ log = "0.4"
 env_logger = "0.11"
 dirs = "7"
 
+[dev-dependencies]
+# Thread RNG for generating throwaway Ed25519 host keys in known_hosts tests.
+rand = "0.10"
+
 [profile.release]
 opt-level = "z"
 lto = "fat"

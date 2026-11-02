@@ -22,6 +22,7 @@ pub struct KnownHostEntry {
     pub raw: String,
 }
 
+#[derive(Debug)]
 pub enum HostKeyStatus {
     /// The exact key is already known and trusted.
     Known,
@@ -213,7 +214,11 @@ fn split_entry(line: &str) -> Option<(String, String)> {
     if line.starts_with('@') {
         return None;
     }
-    let mut parts = line.splitn(3, ' ');
+    // Two fields only: the key blob itself is `keytype base64` (plus an
+    // optional trailing comment). A previous `splitn(3)` cut the blob after
+    // the key type, so a pinned key never matched and every reconnect was
+    // misreported as `Changed`.
+    let mut parts = line.splitn(2, ' ');
     let hosts = parts.next()?.to_string();
     let key = parts.next()?.to_string();
     Some((hosts, key))
@@ -279,4 +284,107 @@ fn hashed_pattern_matches(pattern: &str, host: &str) -> Result<bool, String> {
 /// Load the user's system known_hosts path (`~/.ssh/known_hosts`).
 pub fn system_known_hosts_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".ssh").join("known_hosts"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use russh::keys::PrivateKey;
+
+    /// A unique temp file per test: parallel-safe and removed on drop.
+    struct TempKnownHosts {
+        path: PathBuf,
+        hosts: KnownHosts,
+    }
+
+    impl TempKnownHosts {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "quartzssh-known-hosts-test-{}.kh",
+                uuid::Uuid::new_v4()
+            ));
+            let hosts = KnownHosts::new(path.clone());
+            TempKnownHosts { path, hosts }
+        }
+    }
+
+    impl Drop for TempKnownHosts {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    fn random_key() -> ssh_key::PublicKey {
+        PrivateKey::random(&mut rand::rng(), ssh_key::Algorithm::Ed25519)
+            .expect("random ed25519 key")
+            .public_key()
+            .clone()
+    }
+
+    /// A stored key that later differs must be reported as Changed, with the
+    /// fingerprint of the previously pinned key (possible MITM, spec 19.5).
+    #[test]
+    fn changed_host_key_is_reported_as_changed() {
+        let temp = TempKnownHosts::new();
+        let key_a = random_key();
+        let key_b = random_key();
+        assert_ne!(
+            key_a.to_openssh().unwrap(),
+            key_b.to_openssh().unwrap(),
+            "the two generated keys must differ"
+        );
+        temp.hosts
+            .add("example.com", 2222, &key_a)
+            .expect("pin key A");
+        match temp.hosts.check("example.com", 2222, &key_b) {
+            Ok(HostKeyStatus::Changed(previous)) => {
+                assert_eq!(
+                    previous,
+                    key_a.fingerprint(HashAlg::Sha256).to_string(),
+                    "the previous fingerprint must be surfaced for the prompt"
+                );
+            }
+            other => panic!("expected Changed, got {other:?}"),
+        }
+    }
+
+    /// The exact pinned key verifies as Known (non-standard port exercises
+    /// the `[host]:port` pattern).
+    #[test]
+    fn known_key_is_reported_as_known() {
+        let temp = TempKnownHosts::new();
+        let key = random_key();
+        temp.hosts.add("example.com", 2222, &key).expect("pin key");
+        assert!(
+            matches!(
+                temp.hosts.check("example.com", 2222, &key),
+                Ok(HostKeyStatus::Known)
+            ),
+            "the pinned key must verify as Known"
+        );
+    }
+
+    /// First contact (and any other host) is New; port 22 uses the bare
+    /// `host` pattern.
+    #[test]
+    fn first_contact_is_reported_as_new() {
+        let temp = TempKnownHosts::new();
+        let key = random_key();
+        assert!(
+            matches!(
+                temp.hosts.check("new.example.org", 22, &key),
+                Ok(HostKeyStatus::New)
+            ),
+            "an unpinned host must be New"
+        );
+        // Pin one host; a different host with the same key is still New.
+        temp.hosts.add("new.example.org", 22, &key).expect("pin");
+        assert!(
+            matches!(
+                temp.hosts.check("other.example.org", 2200, &key),
+                Ok(HostKeyStatus::New)
+            ),
+            "pinning is per host, not per key"
+        );
+    }
 }

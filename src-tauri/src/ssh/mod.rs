@@ -11,6 +11,7 @@ use russh::keys::ssh_key;
 use russh::keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
 use russh::{Channel, ChannelMsg, Disconnect};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -303,6 +304,25 @@ pub struct ConnectParams {
     pub pending: PendingHostKeys,
 }
 
+/// russh's default algorithm preferences are already modern: the
+/// post-quantum hybrid `mlkem768x25519-sha256` comes first and SHA-1 based
+/// KEX, ciphers and MACs are excluded. Upstream still advertises the bare
+/// `ssh-rsa` host key algorithm though, whose signatures are SHA-1
+/// (RFC 4253). Drop it so an RSA host key can only be verified with
+/// `rsa-sha2-256` / `rsa-sha2-512` signatures (RFC 8332); everything else
+/// stays as upstream configured it.
+fn hardened_preferred(mut preferred: russh::Preferred) -> russh::Preferred {
+    preferred.key = Cow::Owned(
+        preferred
+            .key
+            .iter()
+            .filter(|algorithm| !matches!(algorithm, ssh_key::Algorithm::Rsa { hash: None }))
+            .cloned()
+            .collect(),
+    );
+    preferred
+}
+
 /// Establish a full interactive SSH session (auth + PTY + shell).
 pub async fn connect(
     app: AppHandle,
@@ -333,13 +353,16 @@ pub async fn connect(
     });
 
     // Secure defaults from russh already prefer mlkem768x25519-sha256 and
-    // exclude SHA-1 based key exchange and signatures.
+    // exclude SHA-1 based key exchange, ciphers and MACs; hardened_preferred
+    // additionally removes the bare `ssh-rsa` host key algorithm (SHA-1
+    // signatures).
     let client_config = client::Config {
         keepalive_interval: Some(Duration::from_secs(
             profile.keepalive_seconds.clamp(10, 600) as u64,
         )),
         keepalive_max: 3,
         nodelay: true,
+        preferred: hardened_preferred(client::Config::default().preferred),
         ..Default::default()
     };
 
@@ -837,5 +860,87 @@ mod tests {
     fn hardware_error_message_is_explicit() {
         assert!(HARDWARE_KEY_UNSUPPORTED.starts_with("hardware_key_unsupported:"));
         assert!(HARDWARE_KEY_UNSUPPORTED.contains("libfido2"));
+    }
+
+    // -- 19.5: the client must never offer weak algorithms ------------------
+
+    /// Post-quantum hybrid KEX first, no SHA-1 key exchange.
+    #[test]
+    fn client_kex_prefers_post_quantum_and_excludes_sha1() {
+        let preferred = client::Config::default().preferred;
+        let kex: Vec<String> = preferred
+            .kex
+            .iter()
+            .map(|name| name.as_ref().to_string())
+            .collect();
+        assert_eq!(
+            kex.first().map(String::as_str),
+            Some("mlkem768x25519-sha256"),
+            "post-quantum hybrid KEX must be the first preference, got {kex:?}"
+        );
+        for banned in [
+            "diffie-hellman-group1-sha1",
+            "diffie-hellman-group14-sha1",
+            "diffie-hellman-group-exchange-sha1",
+        ] {
+            assert!(
+                !kex.iter().any(|name| name == banned),
+                "insecure SHA-1 KEX {banned} must not be offered, got {kex:?}"
+            );
+        }
+    }
+
+    /// No legacy ciphers and no SHA-1 MACs. ("ssh-rsa" is a host key
+    /// algorithm, not a KEX or cipher; covered by the signature test below.)
+    #[test]
+    fn client_ciphers_and_macs_exclude_legacy_algorithms() {
+        let preferred = client::Config::default().preferred;
+        let ciphers: Vec<String> = preferred
+            .cipher
+            .iter()
+            .map(|name| name.as_ref().to_string())
+            .collect();
+        for banned in ["arcfour", "arcfour128", "arcfour256", "3des-cbc"] {
+            assert!(
+                !ciphers.iter().any(|name| name == banned),
+                "insecure cipher {banned} must not be offered, got {ciphers:?}"
+            );
+        }
+        let macs: Vec<String> = preferred
+            .mac
+            .iter()
+            .map(|name| name.as_ref().to_string())
+            .collect();
+        for banned in ["hmac-sha1", "hmac-sha1-96", "hmac-sha1-etm@openssh.com"] {
+            assert!(
+                !macs.iter().any(|name| name == banned),
+                "insecure MAC {banned} must not be offered, got {macs:?}"
+            );
+        }
+    }
+
+    /// `Algorithm::Rsa { hash: None }` (wire name "ssh-rsa") signs with
+    /// SHA-1 (RFC 4253). russh 0.65 still advertises it by default, so the
+    /// client config filters it out: an RSA host key must only be accepted
+    /// with rsa-sha2-256 / rsa-sha2-512 signatures (RFC 8332).
+    #[test]
+    fn client_host_key_algorithms_exclude_rsa_sha1() {
+        let preferred = hardened_preferred(client::Config::default().preferred);
+        let key_names: Vec<String> = preferred.key.iter().map(ToString::to_string).collect();
+        assert!(
+            !key_names.iter().any(|name| name == "ssh-rsa"),
+            "bare ssh-rsa (SHA-1 signatures) must not be offered, got {key_names:?}"
+        );
+        assert!(
+            !preferred
+                .key
+                .iter()
+                .any(|algorithm| matches!(algorithm, ssh_key::Algorithm::Rsa { hash: None })),
+            "Algorithm::Rsa {{ hash: None }} must be filtered out, got {key_names:?}"
+        );
+        // Strong RSA signatures stay available and Ed25519 stays first.
+        assert!(key_names.contains(&"rsa-sha2-256".to_string()));
+        assert!(key_names.contains(&"rsa-sha2-512".to_string()));
+        assert_eq!(key_names.first().map(String::as_str), Some("ssh-ed25519"));
     }
 }
