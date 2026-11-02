@@ -33,6 +33,24 @@ export interface ConnectError {
   code: string;
 }
 
+/** Recipients of broadcast input and paste (README roadmap: broadcast
+ * paste). Every connected session when the current one is among them and
+ * there is more than one; otherwise only the current session — or nothing
+ * when there is no current session. */
+export function resolveBroadcastTargets(
+  connectedSessionIds: string[],
+  currentSessionId: string | undefined,
+): string[] {
+  if (
+    currentSessionId !== undefined &&
+    connectedSessionIds.length > 1 &&
+    connectedSessionIds.includes(currentSessionId)
+  ) {
+    return connectedSessionIds;
+  }
+  return currentSessionId === undefined ? [] : [currentSessionId];
+}
+
 interface SessionsStore {
   profiles: Profile[];
   tabs: Tab[];

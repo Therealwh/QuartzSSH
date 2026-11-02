@@ -162,7 +162,7 @@
     "confirmClose": "Turn off broadcast input?",
     "confirmCloseText": "Input will go to the active terminal only.",
     "splitHint": "Split view needs at least two terminals. Connect another server.",
-    "broadcastHint": "Broadcast input needs at least two connected terminals.",
+    "broadcastHint": "Broadcast mode needs at least two connected terminals: both input and paste are sent to all of them.",
     "restoreHint": "Restored tabs: {{count}}. Some terminals may need manual reconnection."
   },
   "monitoring": {
