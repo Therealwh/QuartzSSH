@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Variant B: crystal built from terminal angle brackets -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#0b1220"/>
+  <path d="M256 76 L352 172 L320 420 L192 420 L160 172 Z" fill="none" stroke="#38bdf8" stroke-width="22" stroke-linejoin="round"/>
+  <polyline points="216,180 176,240 216,300" fill="none" stroke="#7ee0d2" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="296,180 336,240 296,300" fill="none" stroke="#818cf8" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="256" y1="330" x2="256" y2="392" stroke="#eafcf8" stroke-width="24" stroke-linecap="round"/>
+</svg>

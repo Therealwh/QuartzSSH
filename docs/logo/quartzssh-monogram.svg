@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Variant C: faceted "Q" monogram -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#101828"/>
+  <polygon points="256,88 384,152 384,328 256,424 128,328 128,152" fill="url(#c-grad)"/>
+  <defs>
+    <linearGradient id="c-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7ee0d2"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="248" r="74" fill="#101828"/>
+  <line x1="300" y1="300" x2="368" y2="380" stroke="#eafcf8" stroke-width="26" stroke-linecap="round"/>
+  <circle cx="256" cy="248" r="34" fill="#eafcf8"/>
+</svg>

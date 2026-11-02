@@ -1,0 +1,38 @@
+# Node
+node_modules/
+dist/
+*.local
+*.tsbuildinfo
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Secrets and keys — NEVER commit
+*.key
+*.pem
+*.ppk
+.env
+.env.*
+!*.example
+
+# Local planning documents (not part of the project)
+promt.md
+
+# Local agent logs and decisions (never commit)
+docs/agent-log.md
+docs/agent-*.md
+docs/decisions/
+
+# Local build tooling
+.tools/
+
+# OS artifacts
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
