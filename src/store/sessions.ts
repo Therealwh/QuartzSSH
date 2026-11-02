@@ -2,6 +2,7 @@ import { create } from "zustand";
 import i18next from "i18next";
 import type { Profile } from "../types";
 import { ipc } from "../lib/ipc";
+import { loadWorkspaceSnapshot, saveWorkspaceSnapshot } from "../lib/workspaceSnapshot";
 import { useDialogs } from "./dialogs";
 
 export type TabKind = "terminal" | "sftp" | "monitoring" | "settings" | "editor";
@@ -40,6 +41,10 @@ interface SessionsStore {
   connections: Record<string, string>;
   connectErrors: Record<string, string>;
   sftpOpenByProfile: Record<string, string>;
+  /** Split view: show up to 4 terminals in a 2x2 grid. */
+  splitView: boolean;
+  /** Broadcast input: keystrokes go to every connected terminal. */
+  broadcastMode: boolean;
 
   loadProfiles: () => Promise<void>;
   saveProfile: (
@@ -58,6 +63,9 @@ interface SessionsStore {
   setTabDirty: (tabId: string, dirty: boolean) => void;
   openMonitoringTab: () => void;
   openSettingsTab: () => void;
+  toggleSplitView: () => void;
+  toggleBroadcastMode: () => Promise<void>;
+  restoreWorkspaceSnapshot: () => void;
   setActiveTab: (id: string) => void;
   closeTab: (id: string) => Promise<void>;
   clearConnectError: (tabId: string) => void;
@@ -82,6 +90,8 @@ export const useSessions = create<SessionsStore>((set, get) => ({
   connections: {},
   connectErrors: {},
   sftpOpenByProfile: {},
+  splitView: false,
+  broadcastMode: false,
 
   loadProfiles: async () => {
     try {
@@ -280,6 +290,74 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
   },
 
+  toggleSplitView: () => set((s) => ({ splitView: !s.splitView })),
+
+  toggleBroadcastMode: async () => {
+    if (get().broadcastMode) {
+      // Leaving broadcast is confirmed so a stray toggle does not cut off
+      // input to the other sessions (24.2).
+      const ok = await useDialogs.getState().requestConfirm(
+        i18next.t("workspaces.confirmClose"),
+        i18next.t("workspaces.confirmCloseText"),
+      );
+      if (ok) set({ broadcastMode: false });
+      return;
+    }
+    const connected = get().tabs.filter(
+      (t) => t.kind === "terminal" && !t.disconnected && t.sessionId,
+    ).length;
+    if (connected < 2) {
+      useDialogs.getState().setUpdateStatus(i18next.t("workspaces.broadcastHint"));
+      return;
+    }
+    set({ broadcastMode: true });
+  },
+
+  /** Brings back the tabs saved before the last shutdown (24.3). Terminals
+   * restore as disconnected; profiles that opt into auto-reconnect and hold
+   * a stored password reconnect with a 1.5 s stagger. */
+  restoreWorkspaceSnapshot: () => {
+    const restored = loadWorkspaceSnapshot();
+    if (restored.length === 0) return;
+    set((s) => {
+      const existingIds = new Set(s.tabs.map((t) => t.id));
+      const incoming = restored.filter((t) => {
+        if (existingIds.has(t.id)) return false;
+        // Singletons may already be open by the time this runs.
+        if (
+          (t.kind === "settings" || t.kind === "monitoring") &&
+          s.tabs.some((x) => x.kind === t.kind)
+        ) {
+          return false;
+        }
+        return true;
+      });
+      if (incoming.length === 0) return {};
+      return {
+        tabs: [...s.tabs, ...incoming],
+        activeTabId: s.activeTabId ?? incoming[0]?.id ?? null,
+      };
+    });
+
+    const { profiles, tabs } = get();
+    let delay = 0;
+    for (const tab of tabs) {
+      if (tab.kind !== "terminal" || !tab.profileId || !tab.disconnected) continue;
+      const profile = profiles.find((p) => p.id === tab.profileId);
+      if (!profile?.autoReconnect) continue;
+      if (!(profile.auth.kind === "password" && profile.auth.savePassword)) continue;
+      const tabId = tab.id;
+      setTimeout(() => {
+        const current = get().tabs.find((t) => t.id === tabId);
+        if (current?.disconnected) void get().reconnectTab(tabId);
+      }, delay);
+      delay += 1500;
+    }
+    useDialogs
+      .getState()
+      .setUpdateStatus(i18next.t("workspaces.restoreHint", { count: restored.length }));
+  },
+
   setActiveTab: (id) => set({ activeTabId: id }),
 
   closeTab: async (id) => {
@@ -365,3 +443,18 @@ export const useAutoReconnect = createZustand<{
   delaySeconds: 5,
   set: (enabled, delaySeconds) => set({ enabled, delaySeconds }),
 }));
+
+// Persist the workspace snapshot whenever the tabs or the view flags change.
+useSessions.subscribe((state, prev) => {
+  if (
+    state.tabs === prev.tabs &&
+    state.splitView === prev.splitView &&
+    state.broadcastMode === prev.broadcastMode
+  ) {
+    return;
+  }
+  saveWorkspaceSnapshot(state.tabs, {
+    splitView: state.splitView,
+    broadcastMode: state.broadcastMode,
+  });
+});

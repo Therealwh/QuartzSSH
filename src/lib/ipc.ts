@@ -4,10 +4,15 @@ import type {
   ConnectResult,
   DirectoryListing,
   FileEntry,
+  ForwardAdded,
+  ForwardEntry,
   HostKeyDecision,
   KeyFileInfo,
   KnownHostEntry,
   LocalListing,
+  McpAuditEntry,
+  McpStartResult,
+  McpStatus,
   Profile,
   ProfileInput,
   RemoteFileContent,
@@ -100,6 +105,12 @@ export const ipc = {
   monitoringClose: (sessionId: string) => invoke<void>("monitoring_close", { sessionId }),
   monitoringIsOpen: (sessionId: string) => invoke<boolean>("monitoring_is_open", { sessionId }),
 
+  // Port forwarding
+  forwardAdd: (sessionId: string, spec: string) =>
+    invoke<ForwardAdded>("forward_add", { sessionId, spec }),
+  forwardRemove: (forwardId: string) => invoke<void>("forward_remove", { forwardId }),
+  forwardList: (sessionId: string) => invoke<ForwardEntry[]>("forward_list", { sessionId }),
+
   // Local filesystem
   localList: (path: string) => invoke<LocalListing>("local_list", { path }),
   localHome: () => invoke<string>("local_home"),
@@ -112,6 +123,15 @@ export const ipc = {
   settingsGet: () => invoke<AppSettings>("settings_get"),
   settingsSet: (value: AppSettings) => invoke<void>("settings_set", { value }),
   appVersion: () => invoke<string>("app_version"),
+
+  // MCP bridge
+  mcpStart: () => invoke<McpStartResult>("mcp_start"),
+  mcpStop: () => invoke<boolean>("mcp_stop"),
+  mcpStatus: () => invoke<McpStatus>("mcp_status"),
+  mcpAuditList: () => invoke<McpAuditEntry[]>("mcp_audit_list"),
+  mcpAuditClear: () => invoke<void>("mcp_audit_clear"),
+  mcpConfirm: (callId: string, approved: boolean) =>
+    invoke<void>("mcp_confirm", { callId, approved }),
 };
 
 export type { FileEntry };

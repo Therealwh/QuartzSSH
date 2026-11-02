@@ -1,6 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { useSessions } from "../store/sessions";
-import { CloseIcon, FolderIcon, GaugeIcon, PencilIcon, SettingsIcon, TerminalIcon } from "./icons";
+import {
+  BroadcastIcon,
+  CloseIcon,
+  FolderIcon,
+  GaugeIcon,
+  PencilIcon,
+  SettingsIcon,
+  SplitIcon,
+  TerminalIcon,
+} from "./icons";
 
 export function TabBar() {
   const { t } = useTranslation();
@@ -8,6 +17,13 @@ export function TabBar() {
   const activeTabId = useSessions((s) => s.activeTabId);
   const setActiveTab = useSessions((s) => s.setActiveTab);
   const closeTab = useSessions((s) => s.closeTab);
+  const splitView = useSessions((s) => s.splitView);
+  const broadcastMode = useSessions((s) => s.broadcastMode);
+  const toggleSplitView = useSessions((s) => s.toggleSplitView);
+  const toggleBroadcastMode = useSessions((s) => s.toggleBroadcastMode);
+
+  const toggle = "q-icon-btn";
+  const toggleActive = "text-[var(--q-accent)]";
 
   return (
     <div
@@ -58,6 +74,26 @@ export function TabBar() {
           </div>
         );
       })}
+      <div className="ml-auto flex items-center gap-1 self-center px-2">
+        <button
+          className={`${toggle} ${splitView ? toggleActive : ""}`}
+          title={t("workspaces.split")}
+          aria-label={t("workspaces.split")}
+          aria-pressed={splitView}
+          onClick={toggleSplitView}
+        >
+          <SplitIcon size={14} />
+        </button>
+        <button
+          className={`${toggle} ${broadcastMode ? toggleActive : ""}`}
+          title={t("workspaces.broadcast")}
+          aria-label={t("workspaces.broadcast")}
+          aria-pressed={broadcastMode}
+          onClick={() => void toggleBroadcastMode()}
+        >
+          <BroadcastIcon size={14} />
+        </button>
+      </div>
     </div>
   );
 }

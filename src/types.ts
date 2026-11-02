@@ -129,6 +129,15 @@ export interface TransferEvent {
 
 export type HostKeyMode = "strict" | "acceptFirst" | "nonStrict";
 
+export type McpConfirmationMode = "always" | "destructive" | "never";
+
+export interface McpSettings {
+  enabled: boolean;
+  port: number;
+  allowlistProfileIds: string[];
+  confirmationMode: McpConfirmationMode;
+}
+
 export interface AppSettings {
   hostKeyMode: HostKeyMode;
   preferPqKex: boolean;
@@ -136,6 +145,34 @@ export interface AppSettings {
   reconnectDelaySeconds: number;
   checkUpdatesOnStart: boolean;
   updateCheckIntervalMinutes: number;
+  mcp: McpSettings;
+}
+
+export interface McpStatus {
+  running: boolean;
+  port: number;
+  hasToken: boolean;
+}
+
+export interface McpStartResult {
+  token: string;
+  port: number;
+}
+
+export interface McpAuditEntry {
+  timestamp: number;
+  tool: string;
+  host: string;
+  argsSummary: string;
+  status: string;
+}
+
+/** Payload of the `mcp:confirm` event raised before a risky tool call. */
+export interface McpConfirmRequest {
+  callId: string;
+  tool: string;
+  host: string;
+  summary: string;
 }
 
 // Monitoring (server health panel)
@@ -167,4 +204,16 @@ export interface SystemStats {
   osName: string;
   kernel: string;
   top: ProcInfo[];
+}
+
+// Port forwarding
+
+export interface ForwardAdded {
+  forwardId: string;
+}
+
+export interface ForwardEntry {
+  id: string;
+  spec: string;
+  active: boolean;
 }

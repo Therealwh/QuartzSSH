@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import type { Tab } from "../store/sessions";
 import { useSessions } from "../store/sessions";
-import { useSettings } from "../store/settings";
+import { cycleTheme, useSettings } from "../store/settings";
 import { getTheme, xtermThemeOf } from "../themes";
 import { decodeUtf8Base64, encodeUtf8Base64 } from "../lib/base64";
 import { ipc } from "../lib/ipc";
@@ -12,6 +12,17 @@ import { CloseIcon, SearchIcon } from "./icons";
 interface SshDataPayload {
   sessionId: string;
   data: string;
+}
+
+/** Live session ids of every connected terminal tab. */
+function connectedTerminalSessions(): string[] {
+  const targets: string[] = [];
+  for (const item of useSessions.getState().tabs) {
+    if (item.kind === "terminal" && !item.disconnected && item.sessionId) {
+      targets.push(item.sessionId);
+    }
+  }
+  return targets;
 }
 
 export function TerminalPane({ tab }: { tab: Tab }) {
@@ -82,9 +93,19 @@ export function TerminalPane({ tab }: { tab: Tab }) {
         }
       });
 
-      // Input to the session.
+      // Input to the session; in broadcast mode every keystroke is mirrored
+      // to all connected terminals (own session included). Only input is
+      // broadcast — each session's output stays in its own pane.
       term.onData((data) => {
-        if (tab.sessionId) void ipc.sshWrite(tab.sessionId, encodeUtf8Base64(data));
+        const payload = encodeUtf8Base64(data);
+        if (useSessions.getState().broadcastMode) {
+          const targets = connectedTerminalSessions();
+          if (targets.length > 1) {
+            for (const sessionId of targets) void ipc.sshWrite(sessionId, payload);
+            return;
+          }
+        }
+        if (tab.sessionId) void ipc.sshWrite(tab.sessionId, payload);
       });
 
       // Keyboard shortcuts inside the terminal.
@@ -103,6 +124,41 @@ export function TerminalPane({ tab }: { tab: Tab }) {
           }
           if (e.ctrlKey && !e.shiftKey && (e.key === "f" || e.key === "F")) {
             setSearchOpen(true);
+            return false;
+          }
+          // preventDefault marks the event as consumed for the
+          // document-level shortcut handler.
+          if (e.ctrlKey && e.shiftKey && !e.altKey) {
+            const key = e.key.toLowerCase();
+            if (key === "m") {
+              e.preventDefault();
+              useSessions.getState().toggleSplitView();
+              return false;
+            }
+            if (key === "b") {
+              e.preventDefault();
+              void useSessions.getState().toggleBroadcastMode();
+              return false;
+            }
+            if (key === "t") {
+              e.preventDefault();
+              cycleTheme();
+              return false;
+            }
+            if (key === "s") {
+              e.preventDefault();
+              const sessions = useSessions.getState();
+              const active = sessions.tabs.find((item) => item.id === sessions.activeTabId);
+              const profile = active?.profileId
+                ? sessions.profiles.find((p) => p.id === active.profileId)
+                : undefined;
+              if (profile) void sessions.openSftpForProfile(profile);
+              return false;
+            }
+          }
+          if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "w" || e.key === "W")) {
+            e.preventDefault();
+            void useSessions.getState().closeTab(tab.id);
             return false;
           }
         }

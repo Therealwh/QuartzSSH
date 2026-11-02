@@ -165,6 +165,53 @@ pub enum HostKeyMode {
     NonStrict,
 }
 
+/// How eagerly the optional MCP bridge asks the user before running a tool.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum McpConfirmationMode {
+    /// Ask before every tool call.
+    Always,
+    /// Ask only for potentially destructive operations (default).
+    #[default]
+    Destructive,
+    /// Never ask. Every tool call runs immediately — not recommended.
+    Never,
+}
+
+/// Settings of the optional embedded MCP server ("QuartzSSH as a bridge for
+/// AI agents"). The bridge is disabled by default and never listens on a
+/// port until the user explicitly presses "Start" in the settings; `enabled`
+/// only records the user's opt-in (the first-enable warning is shown once).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    /// TCP port on 127.0.0.1. Valid range is 47200-47300 (enforced on start).
+    #[serde(default = "default_mcp_port")]
+    pub port: u16,
+    /// Profiles the bridge is allowed to touch. Empty = nothing is exposed.
+    #[serde(default)]
+    pub allowlist_profile_ids: Vec<String>,
+    #[serde(default)]
+    pub confirmation_mode: McpConfirmationMode,
+}
+
+impl Default for McpSettings {
+    fn default() -> Self {
+        McpSettings {
+            enabled: false,
+            port: 47215,
+            allowlist_profile_ids: Vec::new(),
+            confirmation_mode: McpConfirmationMode::Destructive,
+        }
+    }
+}
+
+fn default_mcp_port() -> u16 {
+    47215
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -175,6 +222,9 @@ pub struct AppSettings {
     pub reconnect_delay_seconds: u32,
     pub check_updates_on_start: bool,
     pub update_check_interval_minutes: u32,
+    /// Optional MCP bridge; disabled by default.
+    #[serde(default)]
+    pub mcp: McpSettings,
 }
 
 impl Default for AppSettings {
@@ -186,6 +236,7 @@ impl Default for AppSettings {
             reconnect_delay_seconds: 5,
             check_updates_on_start: true,
             update_check_interval_minutes: 12 * 60,
+            mcp: McpSettings::default(),
         }
     }
 }

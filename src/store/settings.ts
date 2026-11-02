@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { DEFAULT_THEME_ID, applyThemeToDom, getTheme } from "../themes";
+import { DEFAULT_THEME_ID, THEMES, applyThemeToDom, getTheme } from "../themes";
 import type { LanguageId } from "../i18n";
 
 export interface UiSettings {
@@ -64,4 +64,11 @@ export const useSettings = create<SettingsStore>((set, get) => ({
 
 export function applyStartupTheme(state: UiSettings) {
   applyThemeToDom(getTheme(state.themeId));
+}
+
+/** Cycle to the next built-in theme (Ctrl+Shift+T). */
+export function cycleTheme() {
+  const { themeId, setTheme } = useSettings.getState();
+  const index = THEMES.findIndex((theme) => theme.id === themeId);
+  setTheme(THEMES[(index + 1) % THEMES.length].id);
 }
