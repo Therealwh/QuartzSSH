@@ -12,8 +12,8 @@
 [![Release](https://img.shields.io/github/v/release/Therealwh/QuartzSSH?include_prereleases)](https://github.com/Therealwh/QuartzSSH/releases/latest)
 [![CI](https://github.com/Therealwh/QuartzSSH/actions/workflows/ci.yml/badge.svg)](https://github.com/Therealwh/QuartzSSH/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Therealwh/QuartzSSH/badge)](https://scorecard.dev/viewer/?uri=github.com/Therealwh/QuartzSSH)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#installation)
-[![i18n](https://img.shields.io/badge/i18n-RU%20%7C%20EN-green)](#localization)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#-installation)
+[![i18n](https://img.shields.io/badge/i18n-RU%20%7C%20EN-green)](#-features)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Made with Tauri](https://img.shields.io/badge/made%20with-Tauri-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app)
 
@@ -78,9 +78,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [x] Port forwarding (local / remote / dynamic SOCKS)
 - [x] Live server statistics panel (CPU, RAM, disk, network)
 - [x] Built-in remote code editor (CodeMirror 6, atomic writes with mtime checks)
-- [ ] Workspaces, split view and broadcast input
+- [x] Workspaces, split view and broadcast input
 - [ ] FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`)
 - [x] Optional MCP server for AI agents (off by default; [docs/mcp-server.md](docs/mcp-server.md))
+- [ ] tauri-driver smoke e2e (in progress)
+- [ ] Broadcast paste in split view
+- [ ] Updater e2e after the first release
 
 ## 🤝 Contributing
 
