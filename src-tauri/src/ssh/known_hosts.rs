@@ -8,8 +8,8 @@ use base64::Engine;
 use hmac::Mac;
 use russh::keys::ssh_key;
 use sha1::Sha1;
-use std::path::PathBuf;
 use ssh_key::HashAlg;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,7 +77,12 @@ impl KnownHosts {
         key.to_openssh().unwrap_or_default()
     }
 
-    pub fn check(&self, host: &str, port: u16, key: &ssh_key::PublicKey) -> Result<HostKeyStatus, String> {
+    pub fn check(
+        &self,
+        host: &str,
+        port: u16,
+        key: &ssh_key::PublicKey,
+    ) -> Result<HostKeyStatus, String> {
         let pattern = Self::host_pattern(host, port);
         let blob = Self::key_blob(key);
         let mut found_any = false;
@@ -275,4 +280,3 @@ fn hashed_pattern_matches(pattern: &str, host: &str) -> Result<bool, String> {
 pub fn system_known_hosts_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".ssh").join("known_hosts"))
 }
-

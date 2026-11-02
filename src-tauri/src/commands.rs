@@ -4,9 +4,7 @@ use base64::Engine;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
-use crate::config::{
-    self, AppSettings, Profile, ProfileInput, ProfileStore, SettingsStore,
-};
+use crate::config::{self, AppSettings, Profile, ProfileInput, ProfileStore, SettingsStore};
 use crate::localfs;
 use crate::sftp::{SftpManager, TransferManager};
 use crate::ssh::known_hosts::{KnownHostEntry, KnownHosts};
@@ -21,7 +19,10 @@ fn now() -> i64 {
 }
 
 fn profile_from_input(input: ProfileInput, existing: Option<Profile>) -> Result<Profile, String> {
-    let id = input.id.or(existing.as_ref().map(|p| p.id.clone())).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = input
+        .id
+        .or(existing.as_ref().map(|p| p.id.clone()))
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let prev = existing;
     Ok(Profile {
         id,
@@ -31,8 +32,12 @@ fn profile_from_input(input: ProfileInput, existing: Option<Profile>) -> Result<
         port: input.port,
         username: input.username,
         auth: input.auth,
-        keepalive_seconds: input.keepalive_seconds.unwrap_or_else(|| prev.as_ref().map(|p| p.keepalive_seconds).unwrap_or(30)),
-        auto_reconnect: input.auto_reconnect.unwrap_or_else(|| prev.as_ref().map(|p| p.auto_reconnect).unwrap_or(true)),
+        keepalive_seconds: input
+            .keepalive_seconds
+            .unwrap_or_else(|| prev.as_ref().map(|p| p.keepalive_seconds).unwrap_or(30)),
+        auto_reconnect: input
+            .auto_reconnect
+            .unwrap_or_else(|| prev.as_ref().map(|p| p.auto_reconnect).unwrap_or(true)),
         created_at: prev.as_ref().map(|p| p.created_at).unwrap_or_else(now),
         updated_at: now(),
     })
@@ -66,7 +71,9 @@ pub async fn profile_save(
                 config::drop_profile_password(&profile.id)?;
             }
         }
-        config::AuthMethod::PublicKey { save_passphrase, .. } => {
+        config::AuthMethod::PublicKey {
+            save_passphrase, ..
+        } => {
             if let Some(pass) = key_passphrase {
                 if *save_passphrase {
                     config::store_key_passphrase(&profile.id, &pass)?;
@@ -138,7 +145,11 @@ pub async fn ssh_disconnect(ssh: State<'_, SshManager>, session_id: String) -> R
 }
 
 #[tauri::command]
-pub fn ssh_write(ssh: State<SshManager>, session_id: String, data_base64: String) -> Result<(), String> {
+pub fn ssh_write(
+    ssh: State<SshManager>,
+    session_id: String,
+    data_base64: String,
+) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64)
         .map_err(|e| format!("bad_base64: {e}"))?;
@@ -146,12 +157,21 @@ pub fn ssh_write(ssh: State<SshManager>, session_id: String, data_base64: String
 }
 
 #[tauri::command]
-pub fn ssh_resize(ssh: State<SshManager>, session_id: String, cols: u32, rows: u32) -> Result<(), String> {
+pub fn ssh_resize(
+    ssh: State<SshManager>,
+    session_id: String,
+    cols: u32,
+    rows: u32,
+) -> Result<(), String> {
     ssh::resize(&ssh, &session_id, cols, rows)
 }
 
 #[tauri::command]
-pub async fn ssh_exec(ssh: State<'_, SshManager>, session_id: String, command: String) -> Result<(i32, String), String> {
+pub async fn ssh_exec(
+    ssh: State<'_, SshManager>,
+    session_id: String,
+    command: String,
+) -> Result<(i32, String), String> {
     ssh::exec(&ssh, &session_id, &command).await
 }
 
@@ -168,7 +188,10 @@ pub struct HostKeyAnswer {
 }
 
 #[tauri::command]
-pub fn host_key_respond(pending: State<PendingHostKeys>, answer: HostKeyAnswer) -> Result<(), String> {
+pub fn host_key_respond(
+    pending: State<PendingHostKeys>,
+    answer: HostKeyAnswer,
+) -> Result<(), String> {
     let sender = pending
         .lock()
         .unwrap()
@@ -183,12 +206,18 @@ pub fn host_key_respond(pending: State<PendingHostKeys>, answer: HostKeyAnswer) 
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn known_hosts_list(known_hosts: State<Arc<KnownHosts>>) -> Result<Vec<KnownHostEntry>, String> {
+pub fn known_hosts_list(
+    known_hosts: State<Arc<KnownHosts>>,
+) -> Result<Vec<KnownHostEntry>, String> {
     known_hosts.list()
 }
 
 #[tauri::command]
-pub fn known_hosts_remove(known_hosts: State<'_, Arc<KnownHosts>>, host: String, port: u16) -> Result<usize, String> {
+pub fn known_hosts_remove(
+    known_hosts: State<'_, Arc<KnownHosts>>,
+    host: String,
+    port: u16,
+) -> Result<usize, String> {
     known_hosts.remove_by_host(&host, port)
 }
 
@@ -236,7 +265,10 @@ pub fn ssh_config_import() -> Result<SshConfigImportResult, String> {
 }
 
 #[tauri::command]
-pub fn ssh_config_export(profiles: State<ProfileStore>, ids: Vec<String>) -> Result<String, String> {
+pub fn ssh_config_export(
+    profiles: State<ProfileStore>,
+    ids: Vec<String>,
+) -> Result<String, String> {
     let all = profiles.list();
     let selected: Vec<Profile> = if ids.is_empty() {
         all
@@ -251,7 +283,11 @@ pub fn ssh_config_export(profiles: State<ProfileStore>, ids: Vec<String>) -> Res
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn sftp_open(ssh: State<'_, SshManager>, sftp: State<'_, SftpManager>, session_id: String) -> Result<String, String> {
+pub async fn sftp_open(
+    ssh: State<'_, SshManager>,
+    sftp: State<'_, SftpManager>,
+    session_id: String,
+) -> Result<String, String> {
     sftp.open(&ssh, &session_id).await
 }
 
@@ -266,31 +302,60 @@ pub async fn sftp_list(
     sftp_id: String,
     path: String,
 ) -> Result<crate::sftp::DirectoryListing, String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::list(&handle, &path).await
 }
 
 #[tauri::command]
-pub async fn sftp_mkdir(sftp: State<'_, SftpManager>, sftp_id: String, path: String) -> Result<(), String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+pub async fn sftp_mkdir(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    path: String,
+) -> Result<(), String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::mkdir(&handle, &path).await
 }
 
 #[tauri::command]
-pub async fn sftp_rename(sftp: State<'_, SftpManager>, sftp_id: String, from: String, to: String) -> Result<(), String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+pub async fn sftp_rename(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    from: String,
+    to: String,
+) -> Result<(), String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::rename(&handle, &from, &to).await
 }
 
 #[tauri::command]
-pub async fn sftp_delete(sftp: State<'_, SftpManager>, sftp_id: String, path: String, is_dir: bool) -> Result<(), String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+pub async fn sftp_delete(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    path: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::delete(&handle, &path, is_dir).await
 }
 
 #[tauri::command]
-pub async fn sftp_chmod(sftp: State<'_, SftpManager>, sftp_id: String, path: String, mode: u32) -> Result<(), String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+pub async fn sftp_chmod(
+    sftp: State<'_, SftpManager>,
+    sftp_id: String,
+    path: String,
+    mode: u32,
+) -> Result<(), String> {
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::chmod(&handle, &path, mode).await
 }
 
@@ -303,7 +368,9 @@ pub async fn sftp_upload(
     local_path: String,
     remote_path: String,
 ) -> Result<String, String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::upload(
         app,
         transfers.inner().clone(),
@@ -323,7 +390,9 @@ pub async fn sftp_download(
     remote_path: String,
     local_path: String,
 ) -> Result<String, String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::download(
         app,
         transfers.inner().clone(),
@@ -335,7 +404,10 @@ pub async fn sftp_download(
 }
 
 #[tauri::command]
-pub fn transfer_cancel(transfers: State<Arc<TransferManager>>, transfer_id: String) -> Result<(), String> {
+pub fn transfer_cancel(
+    transfers: State<Arc<TransferManager>>,
+    transfer_id: String,
+) -> Result<(), String> {
     transfers.cancel(&transfer_id)
 }
 
@@ -346,7 +418,9 @@ pub async fn sftp_read_text(
     path: String,
     max_bytes: Option<u64>,
 ) -> Result<String, String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::read_remote_text(&handle, &path, max_bytes.unwrap_or(10 * 1024 * 1024)).await
 }
 
@@ -357,7 +431,9 @@ pub async fn sftp_write_text(
     path: String,
     content: String,
 ) -> Result<(), String> {
-    let handle = sftp.get(&sftp_id).ok_or_else(|| "sftp_session_not_found".to_string())?;
+    let handle = sftp
+        .get(&sftp_id)
+        .ok_or_else(|| "sftp_session_not_found".to_string())?;
     crate::sftp::write_remote_text(&handle, &path, &content).await
 }
 
@@ -400,7 +476,10 @@ pub fn settings_get(settings: State<SettingsStore>) -> AppSettings {
 }
 
 #[tauri::command]
-pub async fn settings_set(settings: State<'_, SettingsStore>, value: AppSettings) -> Result<(), String> {
+pub async fn settings_set(
+    settings: State<'_, SettingsStore>,
+    value: AppSettings,
+) -> Result<(), String> {
     settings.set(value)
 }
 

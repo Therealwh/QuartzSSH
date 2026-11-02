@@ -6,8 +6,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tauri::{AppHandle, Emitter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::ssh::SshManager;
 
@@ -264,6 +264,74 @@ fn remote_file_name(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
+fn transfer_event(
+    kind: &str,
+    id: &str,
+    file_name: &str,
+    transferred: u64,
+    total: u64,
+    status: TransferStatus,
+    error: Option<String>,
+) -> TransferEvent {
+    TransferEvent {
+        id: id.to_string(),
+        kind: kind.into(),
+        file_name: file_name.to_string(),
+        transferred,
+        total,
+        status,
+        error,
+    }
+}
+
+/// Bundles the event context of a single transfer so the worker functions
+/// stay small; emits progress and the final status event.
+struct TransferJob<'a> {
+    app: &'a AppHandle,
+    id: &'a str,
+    file_name: &'a str,
+    total: u64,
+    kind: &'static str,
+}
+
+impl TransferJob<'_> {
+    fn event(
+        &self,
+        transferred: u64,
+        status: TransferStatus,
+        error: Option<String>,
+    ) -> TransferEvent {
+        transfer_event(
+            self.kind,
+            self.id,
+            self.file_name,
+            transferred,
+            self.total,
+            status,
+            error,
+        )
+    }
+
+    fn finish(&self, result: Result<u64, (u64, String)>) {
+        match result {
+            Ok(transferred) => {
+                emit_transfer(
+                    self.app,
+                    self.event(transferred, TransferStatus::Done, None),
+                );
+            }
+            Err((transferred, err)) => {
+                let status = if err == "cancelled" {
+                    TransferStatus::Cancelled
+                } else {
+                    TransferStatus::Failed
+                };
+                emit_transfer(self.app, self.event(transferred, status, Some(err)));
+            }
+        }
+    }
+}
+
 const CHUNK: usize = 256 * 1024;
 
 pub async fn upload(
@@ -286,73 +354,50 @@ pub async fn upload(
         .map_err(|e| format!("local_file_failed: {e}"))?
         .len();
 
-    let ev = |transferred: u64, status: TransferStatus, error: Option<String>| TransferEvent {
-        id: id.clone(),
-        kind: "upload".into(),
-        file_name: file_name.clone(),
-        transferred,
-        total,
-        status,
-        error,
-    };
+    let remote_target =
+        if remote_path.ends_with('/') || remote_path == "." || remote_path.is_empty() {
+            join_remote(&remote_path, &file_name)
+        } else {
+            remote_path
+        };
 
-    let remote_target = if remote_path.ends_with('/') || remote_path == "." || remote_path.is_empty() {
-        join_remote(&remote_path, &file_name)
-    } else {
-        remote_path
-    };
-
-    emit_transfer(&app, ev(0, TransferStatus::Active, None));
+    emit_transfer(
+        &app,
+        transfer_event(
+            "upload",
+            &id,
+            &file_name,
+            0,
+            total,
+            TransferStatus::Active,
+            None,
+        ),
+    );
     let app2 = app.clone();
     let transfers2 = transfers.clone();
     let id2 = id.clone();
+    let file_name2 = file_name.clone();
     tokio::spawn(async move {
-        let result = do_upload(&handle.sftp, &local, &remote_target, total, cancel_rx, &app2, &id2, &file_name).await;
+        let job = TransferJob {
+            app: &app2,
+            id: &id2,
+            file_name: &file_name2,
+            total,
+            kind: "upload",
+        };
+        let result = do_upload(&handle.sftp, &local, &remote_target, cancel_rx, &job).await;
         transfers2.unregister(&id2);
-        match result {
-            Ok(transferred) => emit_transfer(&app2, upload_event(&id2, &file_name, transferred, total, TransferStatus::Done, None)),
-            Err((transferred, err)) => {
-                let status = if err == "cancelled" { TransferStatus::Cancelled } else { TransferStatus::Failed };
-                emit_transfer(&app2, upload_event(&id2, &file_name, transferred, total, status, Some(err)));
-            }
-        }
+        job.finish(result);
     });
     Ok(id)
-}
-
-fn upload_event(id: &str, file_name: &str, transferred: u64, total: u64, status: TransferStatus, error: Option<String>) -> TransferEvent {
-    TransferEvent {
-        id: id.to_string(),
-        kind: "upload".into(),
-        file_name: file_name.to_string(),
-        transferred,
-        total,
-        status,
-        error,
-    }
-}
-
-fn download_event(id: &str, file_name: &str, transferred: u64, total: u64, status: TransferStatus, error: Option<String>) -> TransferEvent {
-    TransferEvent {
-        id: id.to_string(),
-        kind: "download".into(),
-        file_name: file_name.to_string(),
-        transferred,
-        total,
-        status,
-        error,
-    }
 }
 
 async fn do_upload(
     sftp: &SftpSession,
     local: &PathBuf,
     remote_target: &str,
-    total: u64,
     mut cancel_rx: tokio::sync::oneshot::Receiver<()>,
-    app: &AppHandle,
-    id: &str,
-    file_name: &str,
+    job: &TransferJob<'_>,
 ) -> Result<u64, (u64, String)> {
     let mut transferred: u64 = 0;
     let mut file = match sftp
@@ -383,7 +428,7 @@ async fn do_upload(
                         return Err((transferred, format!("sftp_write_failed: {e}")));
                     }
                     transferred += n as u64;
-                    emit_transfer(app, upload_event(id, file_name, transferred, total, TransferStatus::Active, None));
+                    emit_transfer(job.app, job.event(transferred, TransferStatus::Active, None));
                 }
                 Err(e) => return Err((transferred, format!("local_read_failed: {e}"))),
             }
@@ -414,20 +459,33 @@ pub async fn download(
         .unwrap_or(0);
     let file_name = remote_file_name(&remote_path);
 
-    emit_transfer(&app, download_event(&id, &file_name, 0, total, TransferStatus::Active, None));
+    emit_transfer(
+        &app,
+        transfer_event(
+            "download",
+            &id,
+            &file_name,
+            0,
+            total,
+            TransferStatus::Active,
+            None,
+        ),
+    );
     let app2 = app.clone();
     let transfers2 = transfers.clone();
     let id2 = id.clone();
+    let file_name2 = file_name.clone();
     tokio::spawn(async move {
-        let result = do_download(&handle.sftp, &remote_path, &local_path, total, cancel_rx, &app2, &id2, &file_name).await;
+        let job = TransferJob {
+            app: &app2,
+            id: &id2,
+            file_name: &file_name2,
+            total,
+            kind: "download",
+        };
+        let result = do_download(&handle.sftp, &remote_path, &local_path, cancel_rx, &job).await;
         transfers2.unregister(&id2);
-        match result {
-            Ok(transferred) => emit_transfer(&app2, download_event(&id2, &file_name, transferred, total, TransferStatus::Done, None)),
-            Err((transferred, err)) => {
-                let status = if err == "cancelled" { TransferStatus::Cancelled } else { TransferStatus::Failed };
-                emit_transfer(&app2, download_event(&id2, &file_name, transferred, total, status, Some(err)));
-            }
-        }
+        job.finish(result);
     });
     Ok(id)
 }
@@ -436,11 +494,8 @@ async fn do_download(
     sftp: &SftpSession,
     remote_path: &str,
     local_path: &str,
-    total: u64,
     mut cancel_rx: tokio::sync::oneshot::Receiver<()>,
-    app: &AppHandle,
-    id: &str,
-    file_name: &str,
+    job: &TransferJob<'_>,
 ) -> Result<u64, (u64, String)> {
     let mut transferred: u64 = 0;
     let mut file = match sftp.open(remote_path).await {
@@ -469,7 +524,7 @@ async fn do_download(
                         return Err((transferred, format!("local_write_failed: {e}")));
                     }
                     transferred += n as u64;
-                    emit_transfer(app, download_event(id, file_name, transferred, total, TransferStatus::Active, None));
+                    emit_transfer(job.app, job.event(transferred, TransferStatus::Active, None));
                 }
                 Err(e) => return Err((transferred, format!("sftp_read_failed: {e}"))),
             }
@@ -482,7 +537,11 @@ async fn do_download(
     Ok(transferred)
 }
 
-pub async fn read_remote_text(handle: &SftpHandle, path: &str, max_bytes: u64) -> Result<String, String> {
+pub async fn read_remote_text(
+    handle: &SftpHandle,
+    path: &str,
+    max_bytes: u64,
+) -> Result<String, String> {
     let meta = handle
         .sftp
         .metadata(path)
@@ -504,7 +563,11 @@ pub async fn read_remote_text(handle: &SftpHandle, path: &str, max_bytes: u64) -
     Ok(String::from_utf8_lossy(&data).to_string())
 }
 
-pub async fn write_remote_text(handle: &SftpHandle, path: &str, content: &str) -> Result<(), String> {
+pub async fn write_remote_text(
+    handle: &SftpHandle,
+    path: &str,
+    content: &str,
+) -> Result<(), String> {
     handle
         .sftp
         .write(path, content.as_bytes())

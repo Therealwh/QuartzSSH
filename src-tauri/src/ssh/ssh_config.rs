@@ -96,9 +96,7 @@ pub fn parse(text: &str) -> ConfigImport {
             "identityfile" => set(current.as_mut(), |e| {
                 e.identity_files.push(expand_tilde(value))
             }),
-            "identitiesonly" => set(current.as_mut(), |e| {
-                e.identities_only = value == "yes"
-            }),
+            "identitiesonly" => set(current.as_mut(), |e| e.identities_only = value == "yes"),
             "proxyjump" => set(current.as_mut(), |e| e.proxy_jump = Some(value.to_string())),
             "serveraliveinterval" => match value.parse::<u32>() {
                 Ok(v) => set(current.as_mut(), |e| e.server_alive_interval = Some(v)),
@@ -173,7 +171,9 @@ pub fn to_profiles(entries: &[ConfigImportEntry]) -> Vec<Profile> {
         .filter(|e| !e.host_patterns.contains('*') && !e.host_patterns.contains('?'))
         .map(|e| {
             let auth = if e.identity_files.is_empty() {
-                AuthMethod::Password { save_password: false }
+                AuthMethod::Password {
+                    save_password: false,
+                }
             } else {
                 AuthMethod::PublicKey {
                     key_path: Some(e.identity_files[0].clone()),
@@ -183,9 +183,18 @@ pub fn to_profiles(entries: &[ConfigImportEntry]) -> Vec<Profile> {
             };
             Profile {
                 id: uuid::Uuid::new_v4().to_string(),
-                name: e.host_patterns.split(',').next().unwrap_or("host").trim().to_string(),
+                name: e
+                    .host_patterns
+                    .split(',')
+                    .next()
+                    .unwrap_or("host")
+                    .trim()
+                    .to_string(),
                 group: String::from("Imported"),
-                host: e.hostname.clone().unwrap_or_else(|| e.host_patterns.clone()),
+                host: e
+                    .hostname
+                    .clone()
+                    .unwrap_or_else(|| e.host_patterns.clone()),
                 port: e.port.unwrap_or(22),
                 username: e.user.clone().unwrap_or_default(),
                 auth,
@@ -206,14 +215,23 @@ pub fn export(profiles: &[Profile]) -> String {
         out.push_str(&format!("    HostName {}\n", p.host));
         out.push_str(&format!("    User {}\n", p.username));
         out.push_str(&format!("    Port {}\n", p.port));
-        if let AuthMethod::PublicKey { key_path, identities_only, .. } = &p.auth {
-            if let Some(path) = key_path {
-                out.push_str(&format!("    IdentityFile {}\n", path));
-                out.push_str(&format!("    IdentitiesOnly {}\n", if *identities_only { "yes" } else { "no" }));
-            }
+        if let AuthMethod::PublicKey {
+            key_path: Some(path),
+            identities_only,
+            ..
+        } = &p.auth
+        {
+            out.push_str(&format!("    IdentityFile {}\n", path));
+            out.push_str(&format!(
+                "    IdentitiesOnly {}\n",
+                if *identities_only { "yes" } else { "no" }
+            ));
         }
         if p.keepalive_seconds > 0 {
-            out.push_str(&format!("    ServerAliveInterval {}\n", p.keepalive_seconds));
+            out.push_str(&format!(
+                "    ServerAliveInterval {}\n",
+                p.keepalive_seconds
+            ));
             out.push_str("    ServerAliveCountMax 3\n");
         }
         out.push('\n');
@@ -281,7 +299,10 @@ Host db
         let text = "Host=q\nHostName=\"quoted.example\"\nUser=bob";
         let parsed = parse(text);
         assert_eq!(parsed.entries.len(), 1);
-        assert_eq!(parsed.entries[0].hostname.as_deref(), Some("quoted.example"));
+        assert_eq!(
+            parsed.entries[0].hostname.as_deref(),
+            Some("quoted.example")
+        );
         assert_eq!(parsed.entries[0].user.as_deref(), Some("bob"));
     }
 
@@ -294,7 +315,9 @@ Host db
             host: "prod.example.com".into(),
             port: 22,
             username: "deploy".into(),
-            auth: AuthMethod::Password { save_password: true },
+            auth: AuthMethod::Password {
+                save_password: true,
+            },
             keepalive_seconds: 30,
             auto_reconnect: true,
             created_at: 0,
@@ -308,10 +331,7 @@ Host db
 
     #[test]
     fn to_profiles_skips_wildcards() {
-        let entries = parse(
-            "Host web1\nHostName w1\nUser u\n\nHost *\nHostName x\n",
-        )
-        .entries;
+        let entries = parse("Host web1\nHostName w1\nUser u\n\nHost *\nHostName x\n").entries;
         let profiles = to_profiles(&entries);
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].host, "w1");

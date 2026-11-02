@@ -5,10 +5,10 @@ mod sftp;
 mod ssh;
 
 use config::{ProfileStore, SettingsStore};
-use std::sync::Arc;
 use sftp::{SftpManager, TransferManager};
 use ssh::known_hosts::KnownHosts;
 use ssh::{PendingHostKeys, SshManager};
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
