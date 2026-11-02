@@ -3,6 +3,27 @@ import { useTranslation } from "react-i18next";
 import { useSessions } from "../../store/sessions";
 import { useDialogs } from "../../store/dialogs";
 import { ipc } from "../../lib/ipc";
+import { isConfigChanged, rememberConfigSnapshot, type ConfigEntrySnapshot } from "../../lib/sshConfigSync";
+import { SshConfigSyncDialog } from "./SshConfigSyncDialog";
+
+function toSnapshotEntry(p: {
+  name: string;
+  host: string;
+  username: string;
+  port: number;
+  auth: { kind: string; keyPath?: string | null };
+  keepaliveSeconds: number;
+}): ConfigEntrySnapshot {
+  return {
+    host: p.name,
+    hostname: p.host,
+    user: p.username,
+    port: p.port,
+    identityFiles: p.auth.kind === "publicKey" && p.auth.keyPath ? 1 : 0,
+    keepalive: p.keepaliveSeconds,
+    proxyJump: undefined,
+  };
+}
 import type { Profile } from "../../types";
 import { ConnectDialog } from "./ConnectDialog";
 import { PlugIcon, PlusIcon, SearchIcon, PencilIcon, TrashIcon, FolderIcon, TerminalIcon } from "../icons";
@@ -28,6 +49,25 @@ export function SessionsPanel() {
   const [editing, setEditing] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Spec 18.3: detect external ~/.ssh/config modifications.
+  const [configSyncHash, setConfigSyncHash] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const status = await ipc.sshConfigStatus().catch(() => null);
+      if (status?.exists && isConfigChanged(status.hash)) setConfigSyncHash(status.hash);
+    })();
+    const onFocus = () => {
+      void ipc
+        .sshConfigStatus()
+        .then((s) => {
+          if (s.exists && isConfigChanged(s.hash)) setConfigSyncHash(s.hash);
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   useEffect(() => {
     if (!menu) return;
@@ -176,6 +216,9 @@ export function SessionsPanel() {
         />
       )}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      {configSyncHash && (
+        <SshConfigSyncDialog hash={configSyncHash} onClose={() => setConfigSyncHash(null)} />
+      )}
     </div>
   );
 }
@@ -263,6 +306,15 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
                 });
               }
               await loadProfiles();
+              // Baseline the imported state so future external edits are
+              // detected against what we just reviewed (spec 18.3).
+              const status = await ipc.sshConfigStatus().catch(() => null);
+              if (status?.exists) {
+                rememberConfigSnapshot(
+                  status.hash,
+                  data.profiles.map(toSnapshotEntry),
+                );
+              }
               onClose();
             }}
           >

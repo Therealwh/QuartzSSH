@@ -61,6 +61,7 @@ pub fn run() {
             commands::known_hosts_import_system,
             commands::ssh_config_import,
             commands::ssh_config_export,
+            commands::ssh_config_status,
             commands::sftp_open,
             commands::sftp_close,
             commands::sftp_list,

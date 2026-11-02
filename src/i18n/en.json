@@ -294,6 +294,17 @@
     "theme": "Theme",
     "language": "Language"
   },
+  "sshConfigSync": {
+    "title": "~/.ssh/config changed",
+    "changed": "The configuration file was modified outside QuartzSSH. Comparison against the last review:",
+    "added": "Added hosts",
+    "removed": "Removed hosts",
+    "changedLabel": "Changed hosts",
+    "noImportableChanges": "The changes contain no importable hosts",
+    "later": "Remind me later",
+    "markReviewed": "Mark reviewed",
+    "import": "Import changes"
+  },
   "errors": {
     "generic": "Error",
     "password_required": "Password required",
