@@ -147,6 +147,17 @@
     "conflictLoad": "Load new version",
     "conflictOverwrite": "Overwrite anyway"
   },
+  "workspaces": {
+    "split": "Split view",
+    "broadcast": "Broadcast input",
+    "banner": "BROADCAST — input goes to all {{count}} connected sessions",
+    "turnOff": "Turn off",
+    "confirmClose": "Turn off broadcast input?",
+    "confirmCloseText": "Input will go to the active terminal only.",
+    "splitHint": "Split view needs at least two terminals. Connect another server.",
+    "broadcastHint": "Broadcast input needs at least two connected terminals.",
+    "restoreHint": "Restored tabs: {{count}}. Some terminals may need manual reconnection."
+  },
   "monitoring": {
     "title": "Server health",
     "selectSession": "Connection",

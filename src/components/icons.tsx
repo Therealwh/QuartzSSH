@@ -170,3 +170,21 @@ export function GaugeIcon({ size, className }: IconProps) {
     </svg>
   );
 }
+
+export function SplitIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <path d="M8 2.5v11" />
+    </svg>
+  );
+}
+
+export function BroadcastIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="8" cy="8" r="1.5" />
+      <path d="M5.6 5.6a3.4 3.4 0 000 4.8M10.4 5.6a3.4 3.4 0 010 4.8M3.4 3.4a6.5 6.5 0 000 9.2M12.6 3.4a6.5 6.5 0 010 9.2" />
+    </svg>
+  );
+}
