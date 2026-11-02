@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TransfersBar } from "../src/components/TransfersBar";
 import { useTransfers } from "../src/store/transfers";
 import { useDialogs } from "../src/store/dialogs";
@@ -56,12 +56,14 @@ describe("TransfersBar", () => {
 
 describe("PasswordDialog", () => {
   it("renders password prompt for the host and resolves on submit", async () => {
-    let resolved: string | null | undefined;
-    useDialogs.getState().requestPassword("password", "example.com").then((v) => (resolved = v));
+    const promise = useDialogs.getState().requestPassword("password", "example.com");
     render(<PasswordDialog />);
     expect(screen.getByText(/example.com/)).toBeTruthy();
     const input = screen.getByPlaceholderText(/Пароль/) as HTMLInputElement;
     expect(input.type).toBe("password");
+    fireEvent.change(input, { target: { value: "hunter2" } });
+    fireEvent.click(screen.getByText("Продолжить"));
+    await expect(promise).resolves.toBe("hunter2");
   });
 
   it("does not render when no prompt is active", () => {

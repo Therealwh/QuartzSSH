@@ -30,7 +30,9 @@ fn default_true() -> bool {
 
 impl Default for AuthMethod {
     fn default() -> Self {
-        AuthMethod::Password { save_password: false }
+        AuthMethod::Password {
+            save_password: false,
+        }
     }
 }
 
@@ -116,7 +118,12 @@ impl ProfileStore {
     }
 
     pub fn get(&self, id: &str) -> Option<Profile> {
-        self.profiles.read().unwrap().iter().find(|p| p.id == id).cloned()
+        self.profiles
+            .read()
+            .unwrap()
+            .iter()
+            .find(|p| p.id == id)
+            .cloned()
     }
 
     pub fn upsert(&self, profile: Profile) -> Result<(), String> {
@@ -144,23 +151,18 @@ impl ProfileStore {
 // Settings
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum HostKeyMode {
     /// Default. Known keys are trusted, new keys require explicit confirmation
     /// (TOFU with consent), changed keys are rejected until the user explicitly
     /// accepts the risk.
+    #[default]
     Strict,
     /// Trust on first use: a new key is pinned silently, changed keys still ask.
     AcceptFirst,
     /// Accept everything. Debugging only, never exposed in the UI.
     NonStrict,
-}
-
-impl Default for HostKeyMode {
-    fn default() -> Self {
-        HostKeyMode::Strict
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,4 +277,3 @@ pub fn load_key_passphrase(profile_id: &str) -> Result<Option<String>, String> {
 pub fn drop_key_passphrase(profile_id: &str) -> Result<(), String> {
     delete_secret(&secret_account(profile_id, "keypass"))
 }
-

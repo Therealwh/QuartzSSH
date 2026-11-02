@@ -16,9 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-use crate::config::{
-    self, AppSettings, AuthMethod, HostKeyMode, Profile,
-};
+use crate::config::{self, AppSettings, AuthMethod, HostKeyMode, Profile};
 use known_hosts::{HostKeyStatus, KnownHosts};
 
 // ---------------------------------------------------------------------------
@@ -49,7 +47,8 @@ pub struct HostKeyPrompt {
     pub previous_fingerprint: String,
 }
 
-pub type PendingHostKeys = Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<HostKeyDecision>>>>;
+pub type PendingHostKeys =
+    Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<HostKeyDecision>>>>;
 
 struct HostKeyGate {
     host: String,
@@ -75,9 +74,7 @@ impl HostKeyGate {
                     .map(|_| true)
                     .map_err(|_| russh::Error::CouldNotReadKey),
                 HostKeyMode::NonStrict => Ok(true),
-                HostKeyMode::Strict => {
-                    self.ask(&key, "new", String::new()).await
-                }
+                HostKeyMode::Strict => self.ask(&key, "new", String::new()).await,
             },
             HostKeyStatus::Changed(previous_fingerprint) => {
                 if self.mode == HostKeyMode::NonStrict {
@@ -118,10 +115,7 @@ impl HostKeyGate {
         // Do not hang forever if the dialog was dismissed silently.
         match tokio::time::timeout(Duration::from_secs(180), rx).await {
             Ok(Ok(HostKeyDecision::AcceptRemember)) => {
-                let stored = self
-                    .known_hosts
-                    .add(&self.host, self.port, key)
-                    .is_ok();
+                let stored = self.known_hosts.add(&self.host, self.port, key).is_ok();
                 Ok(stored)
             }
             Ok(Ok(HostKeyDecision::Accept)) => Ok(true),
@@ -210,10 +204,6 @@ impl SshManager {
         self.sessions.lock().unwrap().remove(id)
     }
 
-    pub fn list(&self) -> Vec<String> {
-        self.sessions.lock().unwrap().keys().cloned().collect()
-    }
-
     /// Metadata of all live sessions, for the UI status bar.
     pub fn info(&self) -> Vec<SessionInfo> {
         self.sessions
@@ -269,7 +259,11 @@ pub struct ConnectParams {
 }
 
 /// Establish a full interactive SSH session (auth + PTY + shell).
-pub async fn connect(app: AppHandle, manager: &SshManager, params: ConnectParams) -> Result<ConnectResult, String> {
+pub async fn connect(
+    app: AppHandle,
+    manager: &SshManager,
+    params: ConnectParams,
+) -> Result<ConnectResult, String> {
     let profile = params.profile;
     let host = profile.host.clone();
     let port = profile.port;
@@ -293,18 +287,21 @@ pub async fn connect(app: AppHandle, manager: &SshManager, params: ConnectParams
         pending: params.pending.clone(),
     });
 
-    let mut client_config = client::Config::default();
     // Secure defaults from russh already prefer mlkem768x25519-sha256 and
     // exclude SHA-1 based key exchange and signatures.
-    client_config.keepalive_interval = Some(Duration::from_secs(
-        profile.keepalive_seconds.clamp(10, 600) as u64
-    ));
-    client_config.keepalive_max = 3;
-    client_config.nodelay = true;
+    let client_config = client::Config {
+        keepalive_interval: Some(Duration::from_secs(
+            profile.keepalive_seconds.clamp(10, 600) as u64,
+        )),
+        keepalive_max: 3,
+        nodelay: true,
+        ..Default::default()
+    };
 
     let handler = ClientHandler { gate };
     let connect_fut = client::connect(Arc::new(client_config), (host.as_str(), port), handler);
-    let mut session_handle = match tokio::time::timeout(Duration::from_secs(30), connect_fut).await {
+    let mut session_handle = match tokio::time::timeout(Duration::from_secs(30), connect_fut).await
+    {
         Ok(Ok(h)) => h,
         Ok(Err(e)) => return Err(format!("ssh_connect_failed: {e}")),
         Err(_) => return Err("connection_timeout".into()),
@@ -404,7 +401,7 @@ pub async fn connect(app: AppHandle, manager: &SshManager, params: ConnectParams
                 },
             }
         }
-        let _ = ev_closed.store(true, Ordering::SeqCst);
+        ev_closed.store(true, Ordering::SeqCst);
         let _ = ev_app.emit(
             "ssh:closed",
             &SshClosedEvent {
@@ -442,8 +439,7 @@ pub fn load_private_key(path: &str, passphrase: Option<&str>) -> Result<PrivateK
         PrivateKey::from_ppk(&data, passphrase.map(String::from))
             .map_err(|e| format!("key_parse_failed: {e}"))?
     } else {
-        PrivateKey::from_openssh(data.as_bytes())
-            .map_err(|e| format!("key_parse_failed: {e}"))?
+        PrivateKey::from_openssh(data.as_bytes()).map_err(|e| format!("key_parse_failed: {e}"))?
     };
     if key.is_encrypted() {
         let pass = passphrase.ok_or("key_passphrase_required")?;
