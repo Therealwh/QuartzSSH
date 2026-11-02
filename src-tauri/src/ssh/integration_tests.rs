@@ -12,6 +12,8 @@ use std::sync::Arc;
 use russh::client;
 use russh::keys::{HashAlg, PrivateKeyWithHashAlg};
 use russh::ChannelMsg;
+use russh_sftp::protocol::OpenFlags;
+use tokio::io::AsyncWriteExt;
 
 /// The test server accepts every presented host key: the container is
 /// ephemeral and the connection never leaves the CI runner.
@@ -122,11 +124,22 @@ async fn sftp_write_read_cleanup_roundtrip() {
 
     let dir = "/tmp/quartzssh-integration";
     let path = format!("{dir}/hello.txt");
-    let _ = sftp.create_dir(dir).await; // EOK when it already exists
+    sftp.create_dir(dir).await.expect("mkdir /tmp subdirectory");
 
-    sftp.write(&path, b"hello from quartzssh")
+    // SftpSession::write opens with WRITE only — no CREATE/TRUNCATE — so a
+    // brand-new file must be created explicitly (russh-sftp 3.0.x behavior).
+    let mut file = sftp
+        .open_with_flags(
+            &path,
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE,
+        )
+        .await
+        .expect("create file");
+    file.write_all(b"hello from quartzssh")
         .await
         .expect("write");
+    file.close().await.expect("close file");
+
     let data = sftp.read(&path).await.expect("read");
     assert_eq!(data, b"hello from quartzssh");
 
