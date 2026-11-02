@@ -1,5 +1,7 @@
 //! SSH session management built on russh.
 
+#[cfg(test)]
+mod integration_tests;
 pub mod known_hosts;
 pub mod ssh_config;
 
