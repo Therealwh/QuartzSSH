@@ -79,11 +79,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [x] Live server statistics panel (CPU, RAM, disk, network)
 - [x] Built-in remote code editor (CodeMirror 6, atomic writes with mtime checks)
 - [x] Workspaces, split view and broadcast input
-- [ ] FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`)
+- [x] FIDO2 hardware keys (`sk-ssh-ed25519@openssh.com`) — partial:
+  detection and profile support are ready; user-presence signing via
+  libfido2 is planned
+
 - [x] Optional MCP server for AI agents (off by default; [docs/mcp-server.md](docs/mcp-server.md))
 - [ ] tauri-driver smoke e2e (in progress)
 - [ ] Broadcast paste in split view
 - [ ] Updater e2e after the first release
+
 
 ## 🤝 Contributing
 

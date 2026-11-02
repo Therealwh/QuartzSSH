@@ -55,12 +55,13 @@ export default function App() {
   const showGrid = splitView && visibleTerminals.length >= 2;
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full w-full flex-col" data-testid="app-shell">
       <div className="flex min-h-0 flex-1">
         <ActivityBar />
         <aside
           className="w-[260px] shrink-0 border-r border-[var(--q-border)] bg-[var(--q-panel)]"
           aria-label={t("sessions.title")}
+          data-testid="sessions-panel"
         >
           <SessionsPanel />
         </aside>

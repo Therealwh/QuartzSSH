@@ -79,11 +79,15 @@ npm run tauri build   # сборка установщика
 - [x] Панель живой статистики сервера (CPU, RAM, диск, сеть)
 - [x] Встроенный редактор кода для файлов на сервере (CodeMirror 6, атомарная запись с проверкой mtime)
 - [x] Workspaces, split-view и broadcast-ввод
-- [ ] Аппаратные ключи FIDO2 (`sk-ssh-ed25519@openssh.com`)
+- [x] Аппаратные ключи FIDO2 (`sk-ssh-ed25519@openssh.com`) — частично:
+  детекция и профильная поддержка готовы, user-presence подпись через
+  libfido2 — в планах
+
 - [x] Опциональный MCP-сервер для интеграции с AI-агентами (выключен по умолчанию; [docs/mcp-server.md](docs/mcp-server.md))
 - [ ] Smoke e2e на tauri-driver (в процессе)
 - [ ] Broadcast-вставка (paste) в split-view
 - [ ] E2E-проверка автообновлений после первого релиза
+
 
 ## 🤝 Участие
 

@@ -482,9 +482,143 @@ pub async fn connect(
     })
 }
 
+// ---------------------------------------------------------------------------
+// Key file inspection (FIDO2/U2F security keys, PuTTY, standard OpenSSH)
+// ---------------------------------------------------------------------------
+
+/// OpenSSH security-key (FIDO2/U2F) algorithm identifiers.
+pub const SK_ED25519_ALGORITHM: &str = "sk-ssh-ed25519@openssh.com";
+pub const SK_ECDSA_NISTP256_ALGORITHM: &str = "sk-ecdsa-sha2-nistp256@openssh.com";
+
+/// Honest early error for hardware keys: the pure-Rust stack (russh/ssh-key)
+/// can parse and verify `sk-*` keys, but user-presence signing must be
+/// performed by the token itself and requires a libfido2 bridge (planned).
+/// See docs/security.md, "Post-Quantum & FIDO2".
+pub const HARDWARE_KEY_UNSUPPORTED: &str =
+    "hardware_key_unsupported: FIDO2 user-presence signing requires libfido2 integration (planned)";
+
+/// Classification of a key file, used for UI badges and for early, honest
+/// errors on key kinds the pure-Rust auth path cannot handle.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum KeyFileInfo {
+    /// OpenSSH private key with a pure-Rust signing path.
+    Standard,
+    /// PuTTY private key (.ppk).
+    Putty,
+    /// OpenSSH security key (FIDO2/U2F); signing requires the hardware token.
+    HardwareFido2 {
+        /// Algorithm identifier, e.g. `sk-ssh-ed25519@openssh.com`.
+        algorithm: String,
+    },
+}
+
+/// Match an `sk-*` (FIDO2/U2F) algorithm identifier against the first token
+/// of an OpenSSH public-key line, including the certificate variants
+/// (`sk-...-cert-v01@openssh.com`). Returns the base algorithm name.
+fn sk_algorithm_from_public_text(text: &str) -> Option<&'static str> {
+    let token = text.split_whitespace().next()?;
+    if token == SK_ED25519_ALGORITHM || token.starts_with("sk-ssh-ed25519-cert") {
+        Some(SK_ED25519_ALGORITHM)
+    } else if token == SK_ECDSA_NISTP256_ALGORITHM
+        || token.starts_with("sk-ecdsa-sha2-nistp256-cert")
+    {
+        Some(SK_ECDSA_NISTP256_ALGORITHM)
+    } else {
+        None
+    }
+}
+
+/// Detect `sk-*` algorithm identifiers inside a base64-decoded OpenSSH
+/// private key body. The PEM text hides the algorithm, but the decoded blob
+/// embeds it as a plain string.
+fn sk_algorithm_from_private_blob(text: &str) -> Option<&'static str> {
+    let body: String = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(body.as_bytes())
+        .ok()?;
+    if !bytes.starts_with(b"openssh-key-v1\0") {
+        return None;
+    }
+    if find_subslice(&bytes, SK_ED25519_ALGORITHM.as_bytes()).is_some() {
+        Some(SK_ED25519_ALGORITHM)
+    } else if find_subslice(&bytes, SK_ECDSA_NISTP256_ALGORITHM.as_bytes()).is_some() {
+        Some(SK_ECDSA_NISTP256_ALGORITHM)
+    } else {
+        None
+    }
+}
+
+/// Substring search over bytes.
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+/// Pure classification from file contents. `private_data` is the selected key
+/// file (None means unreadable), `public_data` the companion `.pub` when it
+/// exists. Hardware detection prefers the `.pub` (its first token names the
+/// algorithm), then falls back to scanning the decoded private blob.
+pub fn classify_key_data(private_data: Option<&str>, public_data: Option<&str>) -> KeyFileInfo {
+    let Some(private) = private_data else {
+        return KeyFileInfo::Standard;
+    };
+    if private.contains("PuTTY-User-Key-File") {
+        return KeyFileInfo::Putty;
+    }
+    if let Some(algorithm) = public_data.and_then(sk_algorithm_from_public_text) {
+        return KeyFileInfo::HardwareFido2 {
+            algorithm: algorithm.to_string(),
+        };
+    }
+    // The selected file may itself be a public-key one-liner (e.g. a .pub
+    // picked by mistake) — its first token names the algorithm directly.
+    if let Some(algorithm) = sk_algorithm_from_public_text(private) {
+        return KeyFileInfo::HardwareFido2 {
+            algorithm: algorithm.to_string(),
+        };
+    }
+    if let Some(algorithm) = sk_algorithm_from_private_blob(private) {
+        return KeyFileInfo::HardwareFido2 {
+            algorithm: algorithm.to_string(),
+        };
+    }
+    KeyFileInfo::Standard
+}
+
+/// Inspect the key file at `path` (plus the companion `path.pub`, when
+/// present) and classify it for UI hints and auth-path decisions.
+pub fn inspect_key_file(path: &str) -> Result<KeyFileInfo, String> {
+    let private_data = std::fs::read_to_string(PathBuf::from(path))
+        .map_err(|e| format!("cannot_read_key: {e}"))?;
+    let pub_path = PathBuf::from(format!("{path}.pub"));
+    let public_data = std::fs::read_to_string(pub_path).ok();
+    Ok(classify_key_data(
+        Some(&private_data),
+        public_data.as_deref(),
+    ))
+}
+
 pub fn load_private_key(path: &str, passphrase: Option<&str>) -> Result<PrivateKey, String> {
     let data = std::fs::read_to_string(PathBuf::from(path))
         .map_err(|e| format!("cannot_read_key: {e}"))?;
+    // FIDO2/U2F security keys cannot sign in-process: the private material
+    // never leaves the token, and russh would fail later with an obscure
+    // parse or signature error. Fail early with an honest message instead.
+    let pub_data = std::fs::read_to_string(PathBuf::from(format!("{path}.pub"))).ok();
+    if let KeyFileInfo::HardwareFido2 { algorithm } =
+        classify_key_data(Some(&data), pub_data.as_deref())
+    {
+        return Err(format!("{HARDWARE_KEY_UNSUPPORTED} [{algorithm}]"));
+    }
     let key = if data.contains("PuTTY-User-Key-File") {
         PrivateKey::from_ppk(&data, passphrase.map(String::from))
             .map_err(|e| format!("key_parse_failed: {e}"))?
@@ -563,4 +697,145 @@ pub fn resize(manager: &SshManager, session_id: &str, cols: u32, rows: u32) -> R
         .input_tx
         .try_send(SshInput::Resize(cols, rows))
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use std::str::FromStr;
+
+    /// Real security-key public keys, taken verbatim from the OpenSSH test
+    /// data also shipped in ssh-key-0.7.0-rc.11/tests/examples/.
+    const SK_ED25519_PUB: &str = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAICFo/k5LU8863u66YC9eUO2170QduohPURkQnbLa/dczAAAABHNzaDo= user@example.com";
+    const SK_ECDSA_PUB: &str = "sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBIELQJ2DgvaX1yQlKFokfWM2suuaCFI2qp0eJodHyg6O4ifxc3XpRKd1OS8dNYQtE/YjdXSrA+AOnMF5ns2Nkx4AAAAEc3NoOg== user@example.com";
+
+    const STANDARD_ED25519_PUB: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ9Km9WUuIu5RIJvDp8aSk3DOV64PzHdBe1Bh6Yc8+8V user@example.com";
+
+    const OPENSSH_HEADER: &str = "-----BEGIN OPENSSH PRIVATE KEY-----";
+    const PPK_HEADER: &str = "PuTTY-User-Key-File-3\nComment: ed25519-key\nPublic-Lines: 4\n";
+
+    /// Build a synthetic OpenSSH private key body whose decoded blob embeds
+    /// `algorithm` (mirrors the real wire format enough for the scanner).
+    fn synthetic_openssh_private(algorithm: &str) -> String {
+        let mut blob = b"openssh-key-v1\0".to_vec();
+        blob.extend_from_slice(b"\0\0\0\x04none");
+        blob.extend_from_slice(algorithm.as_bytes());
+        let body = base64::engine::general_purpose::STANDARD.encode(&blob);
+        format!("{OPENSSH_HEADER}\n{body}\n-----END OPENSSH PRIVATE KEY-----\n")
+    }
+
+    #[test]
+    fn standard_key_is_detected() {
+        let private = synthetic_openssh_private("ssh-ed25519");
+        let info = classify_key_data(Some(&private), Some(STANDARD_ED25519_PUB));
+        assert_eq!(info, KeyFileInfo::Standard);
+    }
+
+    #[test]
+    fn putty_key_is_detected() {
+        let info = classify_key_data(Some(PPK_HEADER), None);
+        assert_eq!(info, KeyFileInfo::Putty);
+        // PuTTY wins even if a .pub companion exists.
+        let info = classify_key_data(Some(PPK_HEADER), Some(STANDARD_ED25519_PUB));
+        assert_eq!(info, KeyFileInfo::Putty);
+    }
+
+    #[test]
+    fn sk_ed25519_detected_via_companion_pub() {
+        let private = synthetic_openssh_private("ssh-ed25519");
+        let info = classify_key_data(Some(&private), Some(SK_ED25519_PUB));
+        assert_eq!(
+            info,
+            KeyFileInfo::HardwareFido2 {
+                algorithm: SK_ED25519_ALGORITHM.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn sk_ecdsa_detected_via_companion_pub() {
+        let private = synthetic_openssh_private("ssh-ed25519");
+        let info = classify_key_data(Some(&private), Some(SK_ECDSA_PUB));
+        assert_eq!(
+            info,
+            KeyFileInfo::HardwareFido2 {
+                algorithm: SK_ECDSA_NISTP256_ALGORITHM.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn sk_detected_from_private_blob_without_companion() {
+        // Missing .pub (None): fall back to the decoded private blob.
+        let private = synthetic_openssh_private(SK_ECDSA_NISTP256_ALGORITHM);
+        let info = classify_key_data(Some(&private), None);
+        assert_eq!(
+            info,
+            KeyFileInfo::HardwareFido2 {
+                algorithm: SK_ECDSA_NISTP256_ALGORITHM.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn sk_certificate_pub_variant_is_detected() {
+        let cert = "sk-ssh-ed25519-cert-v01@openssh.com AAAA... comment";
+        let info = classify_key_data(Some(OPENSSH_HEADER), Some(cert));
+        assert_eq!(
+            info,
+            KeyFileInfo::HardwareFido2 {
+                algorithm: SK_ED25519_ALGORITHM.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn a_pub_file_selected_directly_is_detected() {
+        let info = classify_key_data(Some(SK_ED25519_PUB), None);
+        assert_eq!(
+            info,
+            KeyFileInfo::HardwareFido2 {
+                algorithm: SK_ED25519_ALGORITHM.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn standard_keys_do_not_trip_hardware_detection() {
+        let private = synthetic_openssh_private("ssh-ed25519");
+        assert_eq!(
+            classify_key_data(Some(&private), None),
+            KeyFileInfo::Standard
+        );
+        // No PEM marker at all (foreign text) must not decode-crash either.
+        assert_eq!(
+            classify_key_data(Some("garbage"), None),
+            KeyFileInfo::Standard
+        );
+    }
+
+    #[test]
+    fn ssh_key_decodes_sk_public_keys() {
+        // Confirmed against ssh-key 0.7.0-rc.11: sk-* public keys parse and
+        // expose the dedicated algorithms (fixtures from tests/examples).
+        let ed = ssh_key::PublicKey::from_str(SK_ED25519_PUB).expect("decode sk-ed25519 pub");
+        assert_eq!(
+            ed.algorithm(),
+            ssh_key::Algorithm::SkEd25519,
+            "ssh-key should decode sk-ssh-ed25519@openssh.com"
+        );
+        let ecdsa = ssh_key::PublicKey::from_str(SK_ECDSA_PUB).expect("decode sk-ecdsa pub");
+        assert_eq!(
+            ecdsa.algorithm(),
+            ssh_key::Algorithm::SkEcdsaSha2NistP256,
+            "ssh-key should decode sk-ecdsa-sha2-nistp256@openssh.com"
+        );
+    }
+
+    #[test]
+    fn hardware_error_message_is_explicit() {
+        assert!(HARDWARE_KEY_UNSUPPORTED.starts_with("hardware_key_unsupported:"));
+        assert!(HARDWARE_KEY_UNSUPPORTED.contains("libfido2"));
+    }
 }
