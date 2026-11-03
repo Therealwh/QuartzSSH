@@ -2,7 +2,9 @@ import { create } from "zustand";
 import i18next from "i18next";
 import type { Profile } from "../types";
 import { ipc } from "../lib/ipc";
+import { translateError } from "../lib/errors";
 import { loadWorkspaceSnapshot, saveWorkspaceSnapshot } from "../lib/workspaceSnapshot";
+import { useNotifications } from "./notifications";
 import { useDialogs } from "./dialogs";
 
 export type TabKind = "terminal" | "sftp" | "monitoring" | "settings" | "editor";
@@ -156,10 +158,17 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       );
       set((s) => ({
         connections: { ...s.connections, [profile.id]: result.sessionId },
+        // Errors are keyed by TAB id — drop the ones belonging to tabs of
+        // this profile (the value comparison against the session id was
+        // wrong and never cleared anything).
         connectErrors: Object.fromEntries(
-          Object.entries(s.connectErrors).filter(([, v]) => v !== result.sessionId),
+          Object.entries(s.connectErrors).filter(([tabId]) => {
+            const tab = s.tabs.find((t) => t.id === tabId);
+            return tab ? tab.profileId !== profile.id : true;
+          }),
         ),
       }));
+      useNotifications.getState().push("success", `${profile.name}: ${i18next.t("sessions.connected")}`);
       // Reuse only a disconnected terminal tab for this profile (reconnect
       // in place). A live tab of the same profile is never taken over, so
       // duplicating the active session (Ctrl+T) always opens a new tab.
@@ -199,7 +208,8 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         if (pass !== null) return get().connectProfile(profile, { keyPassphrase: pass });
         return null;
       }
-      // Surface the error on the tab (or as a placeholder tab).
+      // Surface the error on the tab (or as a placeholder tab) and as a
+      // toast — a silent failure is indistinguishable from a hang.
       const existing = get().tabs.find((t) => t.profileId === profile.id && t.kind === "terminal");
       const tabId = existing?.id ?? newTabId();
       set((s) => ({
@@ -219,6 +229,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
             ],
         activeTabId: tabId,
       }));
+      useNotifications.getState().push("error", translateError(code));
       return null;
     }
   },
