@@ -121,7 +121,7 @@ export function SessionsPanel() {
       <div className="relative px-3 py-2">
         <SearchIcon size={13} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--q-muted)]" />
         <input
-          className="q-input pl-7"
+          className="q-input pl-9"
           placeholder={t("sessions.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
