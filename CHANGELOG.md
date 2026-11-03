@@ -5,7 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-11-03
+
+### Fixed
+
+- Crash of the whole application when a session disconnected or a
+  disconnected tab was reconnected (React hook order violation).
+- Closing the SFTP tab no longer kills a live terminal sharing the same
+  SSH session; closing one editor tab no longer discards the other
+  editors of that session.
+- Dead sessions are removed from the active-connection state (status
+  bar counter, SFTP/monitoring targets).
+- File drag-and-drop between SFTP panes now works at Windows display
+  scaling 125/150%.
+
+### Added
+
+- Connection failures surface as translated toasts and on the
+  disconnected-tab overlay (password, host key, timeout, hardware key).
+- Settings reorganized into a two-pane category layout.
+- Session lifecycle regression tests (15 files / 89 frontend tests,
+  63 Rust tests).
 
 ### Added
 
