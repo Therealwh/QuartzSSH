@@ -245,6 +245,11 @@ export function TerminalPane({ tab }: { tab: Tab }) {
     return () => window.removeEventListener("click", close);
   }, [menu]);
 
+  // Must run unconditionally: calling a hook after the disconnected early
+  // return below changed the hook count between renders and crashed React
+  // on every live -> disconnected (or reconnect) transition.
+  const connectError = useSessions((s) => s.connectErrors)[tab.id];
+
   const doSearch = (dir: "next" | "prev") => {
     if (!query) return;
     dir === "next"
@@ -253,7 +258,6 @@ export function TerminalPane({ tab }: { tab: Tab }) {
   };
 
   if (tab.disconnected) {
-    const connectError = useSessions((s) => s.connectErrors)[tab.id];
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <div className="text-sm text-[var(--q-muted)]">{t("terminal.disconnected")}</div>
