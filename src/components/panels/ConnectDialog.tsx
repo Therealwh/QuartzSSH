@@ -39,6 +39,7 @@ export function ConnectDialog({ profile, onClose }: Props) {
     profile?.auth.kind === "publicKey" ? profile.auth.identitiesOnly : true,
   );
   const [keepalive, setKeepalive] = useState(profile?.keepaliveSeconds ?? 30);
+  const keepaliveValue = Number.isFinite(keepalive) && keepalive > 0 ? keepalive : 30;
   const [autoReconnect, setAutoReconnect] = useState(profile?.autoReconnect ?? true);
   const [forwards, setForwards] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -87,7 +88,7 @@ export function ConnectDialog({ profile, onClose }: Props) {
             savePassphrase,
             identitiesOnly,
           },
-    keepaliveSeconds: keepalive,
+    keepaliveSeconds: keepaliveValue,
     autoReconnect,
   });
 
@@ -113,8 +114,19 @@ export function ConnectDialog({ profile, onClose }: Props) {
       authKind === "password" && password ? password : undefined,
       authKind === "publicKey" && keyPassphrase ? keyPassphrase : undefined,
     );
-    if (saved && andConnect) {
-      const sessionId = await connectProfile(saved);
+    if (!saved) {
+      setBusy(false);
+      setUpdateStatus(t("connect.saveFailed"));
+      return;
+    }
+    if (andConnect) {
+      // Reuse the secrets typed into the dialog: when they are not saved to
+      // the OS keychain the profile has none, and without them the backend
+      // would prompt for the very password the user just entered.
+      const sessionId = await connectProfile(saved, {
+        password: authKind === "password" && password ? password : undefined,
+        keyPassphrase: authKind === "publicKey" && keyPassphrase ? keyPassphrase : undefined,
+      });
       if (sessionId) await applyForwards(sessionId);
     }
     setBusy(false);

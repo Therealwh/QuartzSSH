@@ -51,7 +51,8 @@
     "browse": "Browse…",
     "save": "Save",
     "cancel": "Cancel",
-    "connectAndSave": "Connect and save"
+    "connectAndSave": "Connect and save",
+    "saveFailed": "Failed to save the connection"
   },
   "fido2": {
     "badgeHardware": "FIDO2 hardware key ({{algorithm}})",
@@ -125,6 +126,7 @@
     "cancelTransfer": "Cancel",
     "noTransfers": "No active transfers",
     "dragHint": "Drag files between the panes",
+    "dirNotTransferable": "Folder transfer is not supported — drag files instead",
     "openFailed": "Failed to open SFTP",
     "downloadTo": "Save as…"
   },
@@ -381,6 +383,7 @@
     "key_passphrase_required": "Key passphrase required",
     "key_passphrase_invalid": "Invalid key passphrase",
     "key_parse_failed": "Could not read the key",
+    "hardware_key_unsupported": "FIDO2 hardware keys are not supported yet (libfido2 integration is planned)",
     "sftp_session_not_found": "SFTP session closed",
     "session_not_found": "Session not found",
     "file_too_large": "File is too large for the editor (10 MB max)",

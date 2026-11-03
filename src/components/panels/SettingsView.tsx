@@ -279,7 +279,14 @@ export function SettingsView() {
                     min={1}
                     max={120}
                     value={backend.reconnectDelaySeconds}
-                    onChange={(e) => void saveBackend({ ...backend, reconnectDelaySeconds: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      // An emptied field must not push NaN into settings_set
+                      // (the backend rejects it and the save silently fails).
+                      if (Number.isFinite(n) && n > 0) {
+                        void saveBackend({ ...backend, reconnectDelaySeconds: n });
+                      }
+                    }}
                   />
                   <span className="text-xs text-[var(--q-muted)]">сек / sec</span>
                 </div>
@@ -381,7 +388,12 @@ export function SettingsView() {
                   min={30}
                   max={10080}
                   value={backend.updateCheckIntervalMinutes}
-                  onChange={(e) => void saveBackend({ ...backend, updateCheckIntervalMinutes: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n > 0) {
+                      void saveBackend({ ...backend, updateCheckIntervalMinutes: n });
+                    }
+                  }}
                 />
               </Row>
               <Row label={t("settings.checkNow")}>

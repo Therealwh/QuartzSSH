@@ -415,7 +415,26 @@ export const useSessions = create<SessionsStore>((set, get) => ({
   closeTab: async (id) => {
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
-    if (tab.sessionId && !tab.disconnected) {
+    // Editor tabs share the SFTP session with the Files tab they were opened
+    // from; closing a Files tab also closes its editor tabs. Closing one
+    // editor tab must not take its sibling editor tabs down with it.
+    const removed = new Set<string>([id]);
+    if (tab.sftpId && tab.kind !== "editor") {
+      for (const t of get().tabs) {
+        if (t.kind === "editor" && t.sftpId === tab.sftpId) removed.add(t.id);
+      }
+    }
+    const remaining = get().tabs.filter((t) => !removed.has(t.id));
+    if (tab.sftpId && !remaining.some((t) => t.sftpId === tab.sftpId)) {
+      void ipc.sftpClose(tab.sftpId).catch(() => undefined);
+    }
+    // An SFTP tab shares the SSH session with the terminal tab of the same
+    // profile: disconnect it only when no remaining live tab still uses it,
+    // so closing one half of the pair does not kill the other.
+    const sessionStillUsed =
+      tab.sessionId !== undefined &&
+      remaining.some((t) => t.sessionId === tab.sessionId && !t.disconnected);
+    if (tab.sessionId && !tab.disconnected && !sessionStillUsed) {
       try {
         await ipc.sshDisconnect(tab.sessionId);
       } catch {
@@ -430,19 +449,6 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         if (tab.sessionId) delete kexBySession[tab.sessionId];
         return { connections, kexBySession };
       });
-    }
-    // Editor tabs share the SFTP session with the Files tab they were opened
-    // from; closing a Files tab also closes its editor tabs, and the SFTP
-    // session is closed only when no remaining tab still uses it.
-    const removed = new Set<string>([id]);
-    if (tab.sftpId) {
-      for (const t of get().tabs) {
-        if (t.kind === "editor" && t.sftpId === tab.sftpId) removed.add(t.id);
-      }
-    }
-    const remaining = get().tabs.filter((t) => !removed.has(t.id));
-    if (tab.sftpId && !remaining.some((t) => t.sftpId === tab.sftpId)) {
-      void ipc.sftpClose(tab.sftpId).catch(() => undefined);
     }
     set((s) => ({
       tabs: remaining,
@@ -464,6 +470,12 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.sessionId === sessionId && t.kind === "terminal" ? { ...t, disconnected: true } : t,
+      ),
+      // The session is gone: forget it everywhere, or the sessions panel
+      // keeps showing the profile as connected, the status bar keeps
+      // counting it and monitoring/SFTP would target a dead session.
+      connections: Object.fromEntries(
+        Object.entries(s.connections).filter(([, sid]) => sid !== sessionId),
       ),
       kexBySession: Object.fromEntries(
         Object.entries(s.kexBySession).filter(([id]) => id !== sessionId),

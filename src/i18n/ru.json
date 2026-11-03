@@ -51,7 +51,8 @@
     "browse": "Обзор…",
     "save": "Сохранить",
     "cancel": "Отмена",
-    "connectAndSave": "Подключиться и сохранить"
+    "connectAndSave": "Подключиться и сохранить",
+    "saveFailed": "Не удалось сохранить подключение"
   },
   "fido2": {
     "badgeHardware": "Аппаратный ключ FIDO2 ({{algorithm}})",
@@ -125,6 +126,7 @@
     "cancelTransfer": "Отменить",
     "noTransfers": "Нет активных передач",
     "dragHint": "Перетащите файлы между панелями",
+    "dirNotTransferable": "Перенос папок не поддерживается — перетащите файлы",
     "openFailed": "Не удалось открыть SFTP",
     "downloadTo": "Сохранить как…"
   },
@@ -381,6 +383,7 @@
     "key_passphrase_required": "Требуется парольная фраза ключа",
     "key_passphrase_invalid": "Неверная парольная фраза",
     "key_parse_failed": "Не удалось прочитать ключ",
+    "hardware_key_unsupported": "Аппаратные ключи FIDO2 пока не поддерживаются (интеграция libfido2 в планах)",
     "sftp_session_not_found": "SFTP-сеанс закрыт",
     "session_not_found": "Сеанс не найден",
     "file_too_large": "Файл слишком большой для редактора (максимум 10 МБ)",
