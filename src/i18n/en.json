@@ -383,6 +383,7 @@
     "key_passphrase_required": "Key passphrase required",
     "key_passphrase_invalid": "Invalid key passphrase",
     "key_parse_failed": "Could not read the key",
+    "hardware_key_unsupported": "FIDO2 hardware keys are not supported yet (libfido2 integration is planned)",
     "sftp_session_not_found": "SFTP session closed",
     "session_not_found": "Session not found",
     "file_too_large": "File is too large for the editor (10 MB max)",
