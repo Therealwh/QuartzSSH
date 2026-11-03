@@ -6,6 +6,7 @@ import { resolveBroadcastTargets, useSessions } from "../store/sessions";
 import { cycleTheme, useSettings } from "../store/settings";
 import { getTheme, xtermThemeOf } from "../themes";
 import { decodeUtf8Base64, encodeUtf8Base64 } from "../lib/base64";
+import { translateError } from "../lib/errors";
 import { ipc } from "../lib/ipc";
 import { CloseIcon, SearchIcon } from "./icons";
 
@@ -252,9 +253,18 @@ export function TerminalPane({ tab }: { tab: Tab }) {
   };
 
   if (tab.disconnected) {
+    const connectError = useSessions((s) => s.connectErrors)[tab.id];
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <div className="text-sm text-[var(--q-muted)]">{t("terminal.disconnected")}</div>
+        {connectError && (
+          <div
+            className="max-w-md rounded-lg border border-[var(--q-danger)] bg-[var(--q-panel)] px-4 py-3 text-center text-sm"
+            role="alert"
+          >
+            {translateError(connectError)}
+          </div>
+        )}
         <button className="q-btn q-btn-primary" onClick={() => void reconnectTab(tab.id)}>
           {t("terminal.reconnect")}
         </button>

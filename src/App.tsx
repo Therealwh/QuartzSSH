@@ -14,6 +14,7 @@ import { PasswordDialog } from "./components/dialogs/PasswordDialog";
 import { ConfirmDialog } from "./components/dialogs/ConfirmDialog";
 import { UpdateDialog } from "./components/dialogs/UpdateDialog";
 import { useSessions } from "./store/sessions";
+import { Toasts } from "./components/Toasts";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 
 // The editor (and its CodeMirror chunk) is only loaded when an editor tab
@@ -134,6 +135,7 @@ export default function App() {
           <TransfersBar />
         </main>
       </div>
+      <Toasts />
       <StatusBar />
       <HostKeyDialog />
       <PasswordDialog />
