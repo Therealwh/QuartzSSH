@@ -236,6 +236,36 @@
     "exportSshConfig": "Export to ssh_config",
     "sshConfigCopied": "Copied to clipboard"
   },
+  "settingsCategories": {
+    "appearance": {
+      "label": "Appearance",
+      "description": "Color schemes, theme builder, transparency, font and language"
+    },
+    "connections": {
+      "label": "Connections",
+      "description": "Auto-reconnect, known hosts and ssh_config export"
+    },
+    "security": {
+      "label": "Security",
+      "description": "Host key verification and post-quantum algorithms"
+    },
+    "mcp": {
+      "label": "MCP Server",
+      "description": "Local MCP bridge for AI agents"
+    },
+    "updates": {
+      "label": "Updates",
+      "description": "Checking for and installing new versions"
+    },
+    "background": {
+      "label": "Background",
+      "description": "Window close behavior and tray mode"
+    },
+    "about": {
+      "label": "About",
+      "description": "Version, license and source code"
+    }
+  },
   "themeCustom": {
     "title": "Custom theme",
     "hint": "Build a theme on top of a base: tune the colors and save — it appears in the theme grid with a custom badge",
