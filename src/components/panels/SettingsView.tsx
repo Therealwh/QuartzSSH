@@ -18,7 +18,16 @@ import type { CustomThemeDraft, Theme } from "../../themes";
 import { LANGUAGES, type LanguageId } from "../../i18n";
 import { manualCheck } from "../../lib/updater";
 import { Modal } from "../dialogs/Modal";
-import { TrashIcon } from "../icons";
+import {
+  BotIcon,
+  InfoIcon,
+  PaletteIcon,
+  PlugIcon,
+  ShieldIcon,
+  TrashIcon,
+  UpdateIcon,
+  WindowIcon,
+} from "../icons";
 
 const MCP_PORT_MIN = 47200;
 const MCP_PORT_MAX = 47300;
@@ -54,6 +63,32 @@ const BUILDER_COLORS: { key: BuilderColorKey; label: string }[] = [
   { key: "termSelection", label: "themeCustom.selection" },
 ];
 
+// ---------------------------------------------------------------------------
+// Settings categories: two-pane layout (category rail + active category pane).
+// ---------------------------------------------------------------------------
+
+type CategoryId =
+  | "appearance"
+  | "connections"
+  | "security"
+  | "mcp"
+  | "updates"
+  | "background"
+  | "about";
+
+const CATEGORIES: {
+  id: CategoryId;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+}[] = [
+  { id: "appearance", Icon: PaletteIcon },
+  { id: "connections", Icon: PlugIcon },
+  { id: "security", Icon: ShieldIcon },
+  { id: "mcp", Icon: BotIcon },
+  { id: "updates", Icon: UpdateIcon },
+  { id: "background", Icon: WindowIcon },
+  { id: "about", Icon: InfoIcon },
+];
+
 /** Reset the builder fields from a base theme (keeping the typed name). */
 function draftFromTheme(theme: Theme, keepName = ""): CustomThemeDraft {
   return {
@@ -78,6 +113,8 @@ export function SettingsView() {
   const [backend, setBackend] = useState<AppSettings | null>(null);
   const [hosts, setHosts] = useState<KnownHostEntry[]>([]);
   const [version, setVersion] = useState("");
+  const [category, setCategory] = useState<CategoryId>("appearance");
+  const [configCopied, setConfigCopied] = useState(false);
 
   useEffect(() => {
     void ipc.settingsGet().then(setBackend).catch(() => undefined);
@@ -95,256 +132,397 @@ export function SettingsView() {
     }
   };
 
+  /** Export all profiles as an ssh_config snippet to the clipboard. */
+  const exportSshConfig = async () => {
+    try {
+      const text = await ipc.sshConfigExport([]);
+      await navigator.clipboard.writeText(text);
+      setConfigCopied(true);
+      setTimeout(() => setConfigCopied(false), 1500);
+    } catch (e) {
+      setUpdateStatus(String(e));
+    }
+  };
+
   if (!backend) return null;
 
-  return (
-    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-6 py-6">
-      <h1 className="mb-6 text-lg font-semibold">{t("settings.title")}</h1>
+  const catLabel = (id: CategoryId) => t(`settingsCategories.${id}.label`);
+  const catDescription = (id: CategoryId) => t(`settingsCategories.${id}.description`);
 
-      <Section title={t("settings.appearance")}>
-        <Row label={t("settings.theme")}>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[...THEMES, ...ui.customThemes].map((theme) => {
-              const isCustom = theme.id.startsWith("custom-");
-              return (
-                <button
-                  key={theme.id}
-                  className={`rounded-lg border p-2 text-left text-xs ${
-                    ui.themeId === theme.id
-                      ? "border-[var(--q-accent)]"
-                      : "border-[var(--q-border)] hover:border-[var(--q-muted)]"
-                  }`}
-                  onClick={() => ui.setTheme(theme.id)}
+  return (
+    <div className="flex h-full">
+      <CategoryRail category={category} onSelect={setCategory} catLabel={catLabel} />
+
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="sticky top-0 z-10 border-b border-[var(--q-border)] bg-[var(--q-bg)] px-8 py-4">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="text-base font-semibold">{catLabel(category)}</h2>
+            <p className="mt-0.5 text-xs text-[var(--q-muted)]">{catDescription(category)}</p>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-3xl space-y-4 px-8 py-6">
+          {category === "appearance" && (
+            <>
+              <Card title={t("settings.theme")}>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[...THEMES, ...ui.customThemes].map((theme) => {
+                    const isCustom = theme.id.startsWith("custom-");
+                    return (
+                      <button
+                        key={theme.id}
+                        className={`rounded-lg border p-2 text-left text-xs ${
+                          ui.themeId === theme.id
+                            ? "border-[var(--q-accent)]"
+                            : "border-[var(--q-border)] hover:border-[var(--q-muted)]"
+                        }`}
+                        onClick={() => ui.setTheme(theme.id)}
+                      >
+                        <div className="mb-1 flex gap-1">
+                          {[theme.ui.bg, theme.ui.accent, theme.term.ansi[1], theme.term.ansi[2], theme.term.ansi[4]].map((c, i) => (
+                            <span key={i} className="h-4 w-4 rounded" style={{ background: c }} />
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate">{theme.name}</span>
+                          {isCustom && (
+                            <span className="shrink-0 rounded bg-[var(--q-elevated)] px-1 text-[9px] uppercase tracking-wide text-[var(--q-muted)]">
+                              {t("themeCustom.badge")}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <Card title={t("settings.transparency")} description={t("settings.transparencyHint")}>
+                <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
+                  <input
+                    type="range"
+                    min={70}
+                    max={100}
+                    value={Math.round(ui.bgOpacity * 100)}
+                    onChange={(e) => ui.setBgOpacity(Number(e.target.value) / 100)}
+                  />
+                  <span className="w-10 text-center">{Math.round(ui.bgOpacity * 100)}%</span>
+                </label>
+              </Card>
+
+              <Card title={t("themeCustom.title")} description={t("themeCustom.hint")}>
+                <ThemeBuilder />
+              </Card>
+
+              <Card title={t("settings.font")}>
+                <div className="flex items-center gap-3">
+                  <select
+                    className="q-input w-64"
+                    value={ui.fontFamily}
+                    aria-label={t("settings.font")}
+                    onChange={(e) => ui.setFont(e.target.value, ui.fontSize)}
+                  >
+                    {MONO_FONTS.map((f) => (
+                      <option key={f} value={f}>
+                        {f.split(",")[0]}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
+                    {t("settings.fontSize")}
+                    <input
+                      type="range"
+                      min={9}
+                      max={24}
+                      value={ui.fontSize}
+                      onChange={(e) => ui.setFont(ui.fontFamily, Number(e.target.value))}
+                    />
+                    <span className="w-6 text-center">{ui.fontSize}</span>
+                  </label>
+                </div>
+              </Card>
+
+              <Card title={t("settings.language")}>
+                <select
+                  className="q-input w-40"
+                  value={ui.language}
+                  aria-label={t("settings.language")}
+                  onChange={(e) => {
+                    const lang = e.target.value as LanguageId;
+                    ui.setLanguage(lang);
+                    void i18n.changeLanguage(lang);
+                  }}
                 >
-                  <div className="mb-1 flex gap-1">
-                    {[theme.ui.bg, theme.ui.accent, theme.term.ansi[1], theme.term.ansi[2], theme.term.ansi[4]].map((c, i) => (
-                      <span key={i} className="h-4 w-4 rounded" style={{ background: c }} />
+                  {LANGUAGES.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </Card>
+            </>
+          )}
+
+          {category === "connections" && (
+            <>
+              <Card title={t("connect.autoReconnect")}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    aria-label={t("connect.autoReconnect")}
+                    checked={backend.autoReconnect}
+                    onChange={(e) => void saveBackend({ ...backend, autoReconnect: e.target.checked })}
+                  />
+                  <input
+                    type="number"
+                    className="w-20"
+                    min={1}
+                    max={120}
+                    value={backend.reconnectDelaySeconds}
+                    onChange={(e) => void saveBackend({ ...backend, reconnectDelaySeconds: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-[var(--q-muted)]">сек / sec</span>
+                </div>
+              </Card>
+
+              <Card title={t("settings.knownHosts")}>
+                <div className="w-full">
+                  {hosts.length === 0 && <div className="text-xs text-[var(--q-muted)]">{t("settings.knownHostsEmpty")}</div>}
+                  <div className="max-h-40 space-y-1 overflow-y-auto">
+                    {hosts.map((h, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-[var(--q-hover)]">
+                        <span className="flex-1 font-mono">
+                          {h.host}:{h.port}
+                        </span>
+                        <span className="max-w-[280px] truncate text-[var(--q-muted)]">{h.fingerprint}</span>
+                        <button
+                          className="q-icon-btn"
+                          title={t("settings.knownHostsRemove")}
+                          onClick={async () => {
+                            await ipc.knownHostsRemove(h.host, h.port).catch(() => undefined);
+                            setHosts(await ipc.knownHostsList());
+                          }}
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate">{theme.name}</span>
-                    {isCustom && (
-                      <span className="shrink-0 rounded bg-[var(--q-elevated)] px-1 text-[9px] uppercase tracking-wide text-[var(--q-muted)]">
-                        {t("themeCustom.badge")}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Row>
-        <Row label={t("settings.transparency")} hint={t("settings.transparencyHint")}>
-          <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
-            <input
-              type="range"
-              min={70}
-              max={100}
-              value={Math.round(ui.bgOpacity * 100)}
-              onChange={(e) => ui.setBgOpacity(Number(e.target.value) / 100)}
-            />
-            <span className="w-10 text-center">{Math.round(ui.bgOpacity * 100)}%</span>
-          </label>
-        </Row>
-        <ThemeBuilder />
-        <Row label={t("settings.language")}>
-          <select
-            className="q-input w-40"
-            value={ui.language}
-            onChange={(e) => {
-              const lang = e.target.value as LanguageId;
-              ui.setLanguage(lang);
-              void i18n.changeLanguage(lang);
-            }}
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </Row>
-        <Row label={t("settings.font")}>
-          <div className="flex items-center gap-3">
-            <select
-              className="q-input w-64"
-              value={ui.fontFamily}
-              onChange={(e) => ui.setFont(e.target.value, ui.fontSize)}
-            >
-              {MONO_FONTS.map((f) => (
-                <option key={f} value={f}>
-                  {f.split(",")[0]}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 text-xs text-[var(--q-muted)]">
-              {t("settings.fontSize")}
-              <input
-                type="range"
-                min={9}
-                max={24}
-                value={ui.fontSize}
-                onChange={(e) => ui.setFont(ui.fontFamily, Number(e.target.value))}
-              />
-              <span className="w-6 text-center">{ui.fontSize}</span>
-            </label>
-          </div>
-        </Row>
-      </Section>
-
-      <Section title={t("settings.security")}>
-        <Row label={t("settings.hostKeyMode")}>
-          <select
-            className="q-input w-64"
-            value={backend.hostKeyMode}
-            onChange={(e) => void saveBackend({ ...backend, hostKeyMode: e.target.value as AppSettings["hostKeyMode"] })}
-          >
-            <option value="strict">{t("settings.hostKeyStrict")}</option>
-            <option value="acceptFirst">{t("settings.hostKeyAcceptFirst")}</option>
-          </select>
-        </Row>
-        <Row label={t("settings.preferPq")} hint={t("settings.preferPqHint")}>
-          <input
-            type="checkbox"
-            checked={backend.preferPqKex}
-            onChange={(e) => void saveBackend({ ...backend, preferPqKex: e.target.checked })}
-          />
-        </Row>
-        <Row label={t("connect.autoReconnect")}>
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={backend.autoReconnect}
-              onChange={(e) => void saveBackend({ ...backend, autoReconnect: e.target.checked })}
-            />
-            <input
-              type="number"
-              className="w-20"
-              min={1}
-              max={120}
-              value={backend.reconnectDelaySeconds}
-              onChange={(e) => void saveBackend({ ...backend, reconnectDelaySeconds: Number(e.target.value) })}
-            />
-            <span className="text-xs text-[var(--q-muted)]">сек / sec</span>
-          </div>
-        </Row>
-
-        <Row label={t("settings.knownHosts")}>
-          <div className="w-full">
-            {hosts.length === 0 && <div className="text-xs text-[var(--q-muted)]">{t("settings.knownHostsEmpty")}</div>}
-            <div className="max-h-40 space-y-1 overflow-y-auto">
-              {hosts.map((h, i) => (
-                <div key={i} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-[var(--q-hover)]">
-                  <span className="flex-1 font-mono">
-                    {h.host}:{h.port}
-                  </span>
-                  <span className="max-w-[280px] truncate text-[var(--q-muted)]">{h.fingerprint}</span>
                   <button
-                    className="q-icon-btn"
-                    title={t("settings.knownHostsRemove")}
+                    className="q-btn mt-2 text-xs"
                     onClick={async () => {
-                      await ipc.knownHostsRemove(h.host, h.port).catch(() => undefined);
+                      await ipc.knownHostsImportSystem().catch(() => undefined);
                       setHosts(await ipc.knownHostsList());
                     }}
                   >
-                    <TrashIcon size={12} />
+                    {t("settings.knownHostsImport")}
                   </button>
                 </div>
-              ))}
-            </div>
-            <button
-              className="q-btn mt-2 text-xs"
-              onClick={async () => {
-                await ipc.knownHostsImportSystem().catch(() => undefined);
-                setHosts(await ipc.knownHostsList());
-              }}
-            >
-              {t("settings.knownHostsImport")}
-            </button>
-          </div>
-        </Row>
-      </Section>
+              </Card>
 
-      <McpServerSection backend={backend} saveBackend={saveBackend} />
+              <Card title={t("settings.exportSshConfig")}>
+                <div className="flex items-center gap-3">
+                  <button className="q-btn text-xs" onClick={() => void exportSshConfig()}>
+                    {t("settings.exportSshConfig")}
+                  </button>
+                  {configCopied && (
+                    <span className="text-xs text-[var(--q-success)]">{t("settings.sshConfigCopied")}</span>
+                  )}
+                </div>
+              </Card>
+            </>
+          )}
 
-      <Section title={t("tray.sectionName")}>
-        <Row label={t("tray.closeToTray")} hint={t("tray.hint")}>
-          <input
-            type="checkbox"
-            checked={backend.closeToTray}
-            onChange={(e) => void saveBackend({ ...backend, closeToTray: e.target.checked })}
-          />
-        </Row>
-      </Section>
+          {category === "security" && (
+            <>
+              <Card title={t("settings.hostKeyMode")}>
+                <select
+                  className="q-input w-64"
+                  value={backend.hostKeyMode}
+                  aria-label={t("settings.hostKeyMode")}
+                  onChange={(e) => void saveBackend({ ...backend, hostKeyMode: e.target.value as AppSettings["hostKeyMode"] })}
+                >
+                  <option value="strict">{t("settings.hostKeyStrict")}</option>
+                  <option value="acceptFirst">{t("settings.hostKeyAcceptFirst")}</option>
+                </select>
+              </Card>
 
-      <Section title={t("settings.updates")}>
-        <Row label={t("settings.checkOnStart")}>
-          <input
-            type="checkbox"
-            checked={backend.checkUpdatesOnStart}
-            onChange={(e) => void saveBackend({ ...backend, checkUpdatesOnStart: e.target.checked })}
-          />
-        </Row>
-        <Row label={t("settings.interval")}>
-          <input
-            type="number"
-            className="w-24"
-            min={30}
-            max={10080}
-            value={backend.updateCheckIntervalMinutes}
-            onChange={(e) => void saveBackend({ ...backend, updateCheckIntervalMinutes: Number(e.target.value) })}
-          />
-        </Row>
-        <Row label={t("settings.checkNow")}>
-          <button
-            className="q-btn text-xs"
-            onClick={async () => {
-              const result = await manualCheck();
-              if (result === "up_to_date") setUpdateStatus(t("updater.upToDate"));
-              else if (result === "failed") setUpdateStatus(t("updater.failed"));
-            }}
-          >
-            {t("settings.checkNow")}
-          </button>
-        </Row>
-      </Section>
+              <Card title={t("settings.preferPq")} description={t("settings.preferPqHint")}>
+                <input
+                  type="checkbox"
+                  aria-label={t("settings.preferPq")}
+                  checked={backend.preferPqKex}
+                  onChange={(e) => void saveBackend({ ...backend, preferPqKex: e.target.checked })}
+                />
+              </Card>
 
-      <Section title={t("settings.about")}>
-        <Row label={t("settings.version")}>
-          <span>{version}</span>
-        </Row>
-        <Row label={t("settings.license")}>
-          <a
-            className="text-[var(--q-accent)] underline-offset-2 hover:underline"
-            href="https://github.com/Therealwh/QuartzSSH/blob/main/LICENSE"
-            target="_blank"
-            rel="noreferrer"
-          >
-            MIT
-          </a>
-        </Row>
-        <Row label={t("settings.repository")}>
-          <a
-            className="text-[var(--q-accent)] underline-offset-2 hover:underline"
-            href="https://github.com/Therealwh/QuartzSSH"
-            target="_blank"
-            rel="noreferrer"
-          >
-            github.com/Therealwh/QuartzSSH
-          </a>
-        </Row>
-      </Section>
+              <div className="flex items-start gap-3 rounded-xl border border-[var(--q-border)] bg-[var(--q-panel)] p-5 text-xs text-[var(--q-muted)]">
+                <InfoIcon size={14} className="mt-0.5 shrink-0" />
+                <span>{t("fido2.libfido2Hint")}</span>
+              </div>
+            </>
+          )}
+
+          {category === "mcp" && <McpServerSection backend={backend} saveBackend={saveBackend} />}
+
+          {category === "updates" && (
+            <Card title={t("settings.updates")}>
+              <Row label={t("settings.checkOnStart")}>
+                <input
+                  type="checkbox"
+                  checked={backend.checkUpdatesOnStart}
+                  onChange={(e) => void saveBackend({ ...backend, checkUpdatesOnStart: e.target.checked })}
+                />
+              </Row>
+              <Row label={t("settings.interval")}>
+                <input
+                  type="number"
+                  className="w-24"
+                  min={30}
+                  max={10080}
+                  value={backend.updateCheckIntervalMinutes}
+                  onChange={(e) => void saveBackend({ ...backend, updateCheckIntervalMinutes: Number(e.target.value) })}
+                />
+              </Row>
+              <Row label={t("settings.checkNow")}>
+                <button
+                  className="q-btn text-xs"
+                  onClick={async () => {
+                    const result = await manualCheck();
+                    if (result === "up_to_date") setUpdateStatus(t("updater.upToDate"));
+                    else if (result === "failed") setUpdateStatus(t("updater.failed"));
+                  }}
+                >
+                  {t("settings.checkNow")}
+                </button>
+              </Row>
+            </Card>
+          )}
+
+          {category === "background" && (
+            <Card title={t("tray.sectionName")}>
+              <Row label={t("tray.closeToTray")} hint={t("tray.hint")}>
+                <input
+                  type="checkbox"
+                  checked={backend.closeToTray}
+                  onChange={(e) => void saveBackend({ ...backend, closeToTray: e.target.checked })}
+                />
+              </Row>
+            </Card>
+          )}
+
+          {category === "about" && (
+            <Card title={t("settings.about")}>
+              <Row label={t("settings.version")}>
+                <span>{version}</span>
+              </Row>
+              <Row label={t("settings.license")}>
+                <a
+                  className="text-[var(--q-accent)] underline-offset-2 hover:underline"
+                  href="https://github.com/Therealwh/QuartzSSH/blob/main/LICENSE"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  MIT
+                </a>
+              </Row>
+              <Row label={t("settings.repository")}>
+                <a
+                  className="text-[var(--q-accent)] underline-offset-2 hover:underline"
+                  href="https://github.com/Therealwh/QuartzSSH"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  github.com/Therealwh/QuartzSSH
+                </a>
+              </Row>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// ---------------------------------------------------------------------------
+// Layout primitives: the left category rail and the content cards.
+// ---------------------------------------------------------------------------
+
+function CategoryRail({
+  category,
+  onSelect,
+  catLabel,
+}: {
+  category: CategoryId;
+  onSelect: (id: CategoryId) => void;
+  catLabel: (id: CategoryId) => string;
+}) {
+  const { t } = useTranslation();
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const idx = CATEGORIES.findIndex((c) => c.id === category);
+    const delta = e.key === "ArrowDown" ? 1 : -1;
+    const next = CATEGORIES[(idx + delta + CATEGORIES.length) % CATEGORIES.length];
+    onSelect(next.id);
+    e.currentTarget
+      .querySelector<HTMLButtonElement>(`[data-category="${next.id}"]`)
+      ?.focus();
+  };
+
   return (
-    <section className="mb-8">
-      <h2 className="mb-3 border-b border-[var(--q-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--q-muted)]">
-        {title}
-      </h2>
-      <div className="space-y-4">{children}</div>
+    <nav
+      className="flex w-[180px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--q-border)] bg-[var(--q-panel)] p-3"
+      aria-label={t("settings.title")}
+      onKeyDown={onKeyDown}
+    >
+      <h1 className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--q-muted)]">
+        {t("settings.title")}
+      </h1>
+      {CATEGORIES.map(({ id, Icon }) => {
+        const active = category === id;
+        return (
+          <button
+            key={id}
+            data-category={id}
+            aria-current={active ? "true" : undefined}
+            onClick={() => onSelect(id)}
+            className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+              active
+                ? "bg-[var(--q-active)] text-[var(--q-text)]"
+                : "text-[var(--q-muted)] hover:bg-[var(--q-hover)] hover:text-[var(--q-text)]"
+            }`}
+          >
+            {active && (
+              <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--q-accent)]" />
+            )}
+            <Icon size={16} className="shrink-0" />
+            <span className="truncate">{catLabel(id)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** A grouped settings card with an optional heading and description. */
+function Card({
+  title,
+  description,
+  children,
+}: {
+  title?: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-[var(--q-border)] bg-[var(--q-panel)] p-5">
+      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {description && (
+        <p className="mt-0.5 text-xs text-[var(--q-muted)]">{description}</p>
+      )}
+      <div className={title || description ? "mt-4 space-y-4" : "space-y-4"}>{children}</div>
     </section>
   );
 }
@@ -394,10 +572,7 @@ function ThemeBuilder() {
   const isSaved = customThemes.some((saved) => saved.id === preview.id);
 
   return (
-    <div className="space-y-3 rounded-lg border border-[var(--q-border)] p-3">
-      <div className="text-sm">{t("themeCustom.title")}</div>
-      <div className="text-xs text-[var(--q-muted)]">{t("themeCustom.hint")}</div>
-
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <select
           className="q-input w-56"
@@ -618,7 +793,7 @@ function McpServerSection({
   };
 
   return (
-    <Section title={t("mcp.title")}>
+    <Card title={t("mcp.title")}>
       <Row label={t("mcp.serverStatus")} hint={t("mcp.description")}>
         <div className="flex items-center gap-2">
           <span className={`text-xs ${status?.running ? "text-[var(--q-success)]" : "text-[var(--q-muted)]"}`}>
@@ -806,6 +981,6 @@ function McpServerSection({
           </div>
         </Modal>
       )}
-    </Section>
+    </Card>
   );
 }

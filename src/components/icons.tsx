@@ -188,3 +188,56 @@ export function BroadcastIcon({ size, className }: IconProps) {
     </svg>
   );
 }
+
+export function PaletteIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M8 1.8a6.2 6.2 0 100 12.4c1 0 1.7-.7 1.7-1.5 0-.8-.6-1.2-.6-1.9 0-.7.5-1.2 1.3-1.2h1.4c1.4 0 2.4-1.1 2.4-2.4C14.2 4.1 11.4 1.8 8 1.8z" />
+      <circle cx="5.2" cy="5.6" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="4.4" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="10.8" cy="5.6" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="4.6" cy="8.6" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function BotIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="3" y="5" width="10" height="8.5" rx="2" />
+      <path d="M8 5V3.4" />
+      <circle cx="8" cy="2.5" r="0.9" />
+      <circle cx="5.8" cy="8.7" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="10.2" cy="8.7" r="0.9" fill="currentColor" stroke="none" />
+      <path d="M6.2 11.4h3.6" />
+    </svg>
+  );
+}
+
+export function UpdateIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M8 4.8v5.4M5.5 8l2.5 2.5L10.5 8" />
+    </svg>
+  );
+}
+
+export function WindowIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+      <path d="M1.5 5.7h13" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ size, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M8 7.4V11" />
+      <circle cx="8" cy="5.1" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
