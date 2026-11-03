@@ -9,15 +9,22 @@ const KEYRING_SERVICE: &str = "QuartzSSH";
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AuthMethod {
     Password {
         /// A password is stored in the OS credential store for this profile.
+        #[serde(default)]
         save_password: bool,
     },
     #[serde(rename_all = "camelCase")]
     PublicKey {
+        #[serde(default)]
         key_path: Option<String>,
+        #[serde(default)]
         save_passphrase: bool,
         #[serde(default = "default_true")]
         identities_only: bool,
@@ -384,5 +391,80 @@ mod tests {
         assert_eq!(back, settings);
         assert!(back.close_to_tray);
         assert_eq!(back.mcp, settings.mcp);
+    }
+}
+
+#[cfg(test)]
+mod auth_serde_tests {
+    use super::*;
+
+    /// Exact JSON payload the ConnectDialog sends for password auth.
+    #[test]
+    fn profile_input_deserializes_from_frontend_payload() {
+        let json = r#"{
+            "name": "test",
+            "group": "",
+            "host": "13.143.164.195",
+            "port": 22,
+            "username": "root",
+            "auth": { "kind": "password", "savePassword": false },
+            "keepaliveSeconds": 30,
+            "autoReconnect": true
+        }"#;
+        let input: ProfileInput =
+            serde_json::from_str(json).expect("ProfileInput deserialization failed");
+        match &input.auth {
+            AuthMethod::Password { save_password } => assert!(!save_password),
+            other => panic!("wrong auth variant: {other:?}"),
+        }
+    }
+
+    /// Key auth payload: camelCase fields must map (keyPath was silently
+    /// dropped before the rename_all_fields fix).
+    #[test]
+    fn public_key_auth_maps_camel_case_fields() {
+        let json = r#"{
+            "name": "k",
+            "group": "",
+            "host": "h",
+            "port": 22,
+            "username": "u",
+            "auth": {
+                "kind": "publicKey",
+                "keyPath": "C:/keys/id_ed25519",
+                "savePassphrase": true,
+                "identitiesOnly": false
+            }
+        }"#;
+        let input: ProfileInput = serde_json::from_str(json).expect("deserialization failed");
+        match &input.auth {
+            AuthMethod::PublicKey {
+                key_path,
+                save_passphrase,
+                identities_only,
+            } => {
+                assert_eq!(key_path.as_deref(), Some("C:/keys/id_ed25519"));
+                assert!(*save_passphrase);
+                assert!(!*identities_only);
+            }
+            other => panic!("wrong auth variant: {other:?}"),
+        }
+    }
+
+    /// Round-trip: serialize a Profile and deserialize the ProfileInput from
+    /// its JSON (the edit-dialog path reuses the same wire format).
+    #[test]
+    fn auth_method_roundtrips_camel_case() {
+        let original = AuthMethod::PublicKey {
+            key_path: Some("/home/u/k".into()),
+            save_passphrase: false,
+            identities_only: true,
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert!(json.contains("keyPath"));
+        assert!(json.contains("savePassphrase"));
+        assert!(json.contains("identitiesOnly"));
+        let back: AuthMethod = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, back);
     }
 }

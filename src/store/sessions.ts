@@ -135,7 +135,9 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       await get().loadProfiles();
       return profile;
     } catch (e) {
-      console.error("profile_save failed", e);
+      // Surface the real backend reason (keyring/serialization etc.)
+      // instead of a generic save-failed message.
+      useNotifications.getState().push("error", translateError(String(e)));
       return null;
     }
   },
