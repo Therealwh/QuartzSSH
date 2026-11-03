@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSessions } from "../store/sessions";
+import { useDialogs } from "../store/dialogs";
 import {
   BroadcastIcon,
   CloseIcon,
@@ -21,6 +22,17 @@ export function TabBar() {
   const broadcastMode = useSessions((s) => s.broadcastMode);
   const toggleSplitView = useSessions((s) => s.toggleSplitView);
   const toggleBroadcastMode = useSessions((s) => s.toggleBroadcastMode);
+  const requestConfirm = useDialogs((s) => s.requestConfirm);
+
+  // A dirty editor tab holds unsaved buffer content; the in-editor Close
+  // button confirms, so the tab-strip close button must not bypass that.
+  const requestClose = async (tabId: string, dirty: boolean) => {
+    if (dirty) {
+      const ok = await requestConfirm(t("editor.closeTitle"), t("editor.closeConfirm"), true);
+      if (!ok) return;
+    }
+    await closeTab(tabId);
+  };
 
   const toggle = "q-icon-btn";
   const toggleActive = "text-[var(--q-accent)]";
@@ -73,7 +85,7 @@ export function TabBar() {
               aria-label={`${t("sftp.delete")} ${tab.title}`}
               onClick={(e) => {
                 e.stopPropagation();
-                void closeTab(tab.id);
+                void requestClose(tab.id, tab.dirty === true);
               }}
             >
               <CloseIcon size={12} />
