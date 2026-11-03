@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-11-03
+
+### Fixed
+
+- **Critical:** saving password-auth profiles failed with a serde
+  `missing field save_password` error — the tagged AuthMethod enum
+  renamed only its variants, not the struct-variant fields, so the
+  camelCase frontend payload did not match (key paths were silently
+  dropped for key-auth profiles as well). Fixed with
+  `rename_all_fields` plus serde defaults; exact-payload regression
+  tests added. Save failures now surface the real backend reason.
+- The sidebar search placeholder no longer slides under the magnifier
+  icon.
+
+### Added
+
+- Bundled fonts: Inter Variable for the interface and JetBrains Mono
+  Variable as the default terminal font (cyrillic subsets included,
+  fully offline).
+
 ## [0.1.1] - 2026-11-03
 
 ### Fixed
