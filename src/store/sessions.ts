@@ -471,6 +471,12 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       tabs: s.tabs.map((t) =>
         t.sessionId === sessionId && t.kind === "terminal" ? { ...t, disconnected: true } : t,
       ),
+      // The session is gone: forget it everywhere, or the sessions panel
+      // keeps showing the profile as connected, the status bar keeps
+      // counting it and monitoring/SFTP would target a dead session.
+      connections: Object.fromEntries(
+        Object.entries(s.connections).filter(([, sid]) => sid !== sessionId),
+      ),
       kexBySession: Object.fromEntries(
         Object.entries(s.kexBySession).filter(([id]) => id !== sessionId),
       ),
