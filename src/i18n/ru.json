@@ -51,7 +51,8 @@
     "browse": "Обзор…",
     "save": "Сохранить",
     "cancel": "Отмена",
-    "connectAndSave": "Подключиться и сохранить"
+    "connectAndSave": "Подключиться и сохранить",
+    "saveFailed": "Не удалось сохранить подключение"
   },
   "fido2": {
     "badgeHardware": "Аппаратный ключ FIDO2 ({{algorithm}})",

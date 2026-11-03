@@ -51,7 +51,8 @@
     "browse": "Browse…",
     "save": "Save",
     "cancel": "Cancel",
-    "connectAndSave": "Connect and save"
+    "connectAndSave": "Connect and save",
+    "saveFailed": "Failed to save the connection"
   },
   "fido2": {
     "badgeHardware": "FIDO2 hardware key ({{algorithm}})",
