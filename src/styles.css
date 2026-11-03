@@ -1,3 +1,5 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 
 :root {
@@ -15,7 +17,7 @@
   --q-warning: #f9e2af;
   --q-success: #a6e3a1;
 
-  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  font-family: "Inter Variable", "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
   color-scheme: dark;
 }

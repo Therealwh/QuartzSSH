@@ -28,7 +28,7 @@ const MIN_OPACITY = 0.7;
 const DEFAULTS: UiSettings = {
   themeId: DEFAULT_THEME_ID,
   language: "en",
-  fontFamily: "Cascadia Mono, Consolas, Menlo, monospace",
+  fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, Menlo, monospace",
   fontSize: 14,
   bgOpacity: 1,
   customThemes: [],

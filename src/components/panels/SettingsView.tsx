@@ -33,6 +33,7 @@ const MCP_PORT_MIN = 47200;
 const MCP_PORT_MAX = 47300;
 
 const MONO_FONTS = [
+  "JetBrains Mono Variable, Cascadia Mono, Consolas, Menlo, monospace",
   "Cascadia Mono, Consolas, Menlo, monospace",
   "Consolas, monospace",
   "JetBrains Mono, monospace",
