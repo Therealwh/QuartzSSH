@@ -1,7 +1,7 @@
 {
   "name": "quartzssh",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lightweight, beautiful and fast open-source SSH/SFTP client",
   "type": "module",
   "license": "MIT",
