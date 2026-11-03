@@ -4,6 +4,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Tab } from "../store/sessions";
 import { EDITOR_MAX_FILE_BYTES, useSessions } from "../store/sessions";
 import { ipc } from "../lib/ipc";
+import { translateError } from "../lib/errors";
 import type { DirectoryListing, FileEntry, LocalListing } from "../types";
 import { formatBytes, formatTime, joinPath, parentPath } from "../lib/format";
 import { useDialogs } from "../store/dialogs";
@@ -99,14 +100,21 @@ export function SftpPane({ tab }: { tab: Tab }) {
       const remoteEl = document.getElementById("sftp-pane-remote");
       if (!remoteEl) return;
       const rect = remoteEl.getBoundingClientRect();
+      // The event position is in physical pixels while getBoundingClientRect
+      // is in CSS pixels: divide by the scale factor or the hit test lands
+      // in the wrong place on every display that is not scaled 1:1.
+      const scale = window.devicePixelRatio || 1;
       const { x, y } = event.payload.position;
-      const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      const logicalX = x / scale;
+      const logicalY = y / scale;
+      const inside =
+        logicalX >= rect.left && logicalX <= rect.right && logicalY >= rect.top && logicalY <= rect.bottom;
       if (!inside || !remote) return;
       const targetDir = remote.path;
       for (const p of event.payload.paths) {
         void ipc
           .sftpUpload(tab.sftpId!, p, targetDir)
-          .catch((e) => setUpdateStatus(String(e)));
+          .catch((e) => setUpdateStatus(translateError(String(e))));
       }
       // Refresh when uploads complete (poll once after a delay).
       setTimeout(() => void loadRemote(targetDir), 1200);
