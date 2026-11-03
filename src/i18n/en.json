@@ -126,6 +126,7 @@
     "cancelTransfer": "Cancel",
     "noTransfers": "No active transfers",
     "dragHint": "Drag files between the panes",
+    "dirNotTransferable": "Folder transfer is not supported — drag files instead",
     "openFailed": "Failed to open SFTP",
     "downloadTo": "Save as…"
   },

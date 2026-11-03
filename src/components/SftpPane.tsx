@@ -45,6 +45,12 @@ export function SftpPane({ tab }: { tab: Tab }) {
 
   const [local, setLocal] = useState<PaneState | null>(null);
   const [remote, setRemote] = useState<PaneState | null>(null);
+  // Drafts of the path bars so they can be typed into; re-synced whenever a
+  // listing navigates or refreshes.
+  const [pathDraft, setPathDraft] = useState<{ local: string; remote: string }>({
+    local: "",
+    remote: "",
+  });
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [prompt, setPrompt] = useState<
     | { kind: "remoteMkdir" }
@@ -65,7 +71,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
       }
       setLocal({ path: listing.path, entries: listing.entries.map((e) => ({ ...e, isSymlink: false, permissions: "" })) });
     } catch (e) {
-      setUpdateStatus(String(e));
+      setUpdateStatus(translateError(String(e)));
     }
   }, [setUpdateStatus]);
 
@@ -75,7 +81,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
       const listing: DirectoryListing = await ipc.sftpList(tab.sftpId, path || ".");
       setRemote({ path: listing.path, entries: listing.entries });
     } catch (e) {
-      setUpdateStatus(String(e));
+      setUpdateStatus(translateError(String(e)));
     }
   }, [tab.sftpId, setUpdateStatus]);
 
@@ -83,6 +89,12 @@ export function SftpPane({ tab }: { tab: Tab }) {
     void loadLocal("");
     void loadRemote(".");
   }, [loadLocal, loadRemote]);
+
+  // Follow navigation and refreshes: the path bar mirrors the real location
+  // until the user edits it again.
+  useEffect(() => {
+    setPathDraft({ local: local?.path ?? "", remote: remote?.path ?? "" });
+  }, [local?.path, remote?.path]);
 
   // Close the row context menu on any click.
   useEffect(() => {
@@ -126,13 +138,18 @@ export function SftpPane({ tab }: { tab: Tab }) {
 
   const transfer = async (from: Side, entry: FileEntry) => {
     if (!tab.sftpId) return;
-    if (entry.isDir) return;
+    if (entry.isDir) {
+      // Transfers are file-only (backend refuses directories); say so
+      // instead of silently doing nothing.
+      setUpdateStatus(t("sftp.dirNotTransferable"));
+      return;
+    }
     if (from === "local" && remote) {
-      await ipc.sftpUpload(tab.sftpId, entry.path, remote.path).catch((e) => setUpdateStatus(String(e)));
+      await ipc.sftpUpload(tab.sftpId, entry.path, remote.path).catch((e) => setUpdateStatus(translateError(String(e))));
       setTimeout(() => void loadRemote(remote.path), 800);
     } else if (from === "remote" && local) {
       const target = joinPath(local.path || (await ipc.localHome()), entry.name, isWin);
-      await ipc.sftpDownload(tab.sftpId, entry.path, target).catch((e) => setUpdateStatus(String(e)));
+      await ipc.sftpDownload(tab.sftpId, entry.path, target).catch((e) => setUpdateStatus(translateError(String(e))));
       setTimeout(() => void loadLocal(local.path), 800);
     }
   };
@@ -160,7 +177,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
         await loadLocal(local?.path ?? "");
       }
     } catch (e) {
-      setUpdateStatus(String(e));
+      setUpdateStatus(translateError(String(e)));
     }
   };
 
@@ -272,12 +289,12 @@ export function SftpPane({ tab }: { tab: Tab }) {
     </div>
   );
 
-  const pathBar = (side: Side, state: PaneState | null) => (
+  const pathBar = (side: Side) => (
     <input
       className="q-input m-1 text-xs"
-      value={state?.path ?? ""}
+      value={pathDraft[side]}
       placeholder={t("sftp.path")}
-      onChange={() => undefined}
+      onChange={(e) => setPathDraft((d) => ({ ...d, [side]: e.target.value }))}
       onKeyDown={(e) => {
         if (e.key === "Enter") navigate(side, (e.target as HTMLInputElement).value);
       }}
@@ -291,7 +308,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
           {t("sftp.local")}
         </div>
         {toolbar("local")}
-        {pathBar("local", local)}
+        {pathBar("local")}
         <div role={local?.entries.length ? "table" : undefined} aria-label={t("sftp.local")} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {local?.entries.length ? renderRows("local", local) : <Empty t={t} />}
         </div>
@@ -302,7 +319,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
           {t("sftp.remote", { host: tab.host ?? "" })}
         </div>
         {toolbar("remote")}
-        {pathBar("remote", remote)}
+        {pathBar("remote")}
         <div role={remote?.entries.length ? "table" : undefined} aria-label={t("sftp.remote", { host: tab.host ?? "" })} className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
           {remote?.entries.length ? renderRows("remote", remote) : <Empty t={t} />}
         </div>
@@ -349,7 +366,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
           onSubmit={async (name) => {
             setPrompt(null);
             if (!tab.sftpId) return;
-            await ipc.sftpMkdir(tab.sftpId, joinPath(remote.path, name)).catch((e) => setUpdateStatus(String(e)));
+            await ipc.sftpMkdir(tab.sftpId, joinPath(remote.path, name)).catch((e) => setUpdateStatus(translateError(String(e))));
             void loadRemote(remote.path);
           }}
           onCancel={() => setPrompt(null)}
@@ -360,7 +377,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
           title={t("sftp.newFolder")}
           onSubmit={async (name) => {
             setPrompt(null);
-            await ipc.localMkdir(joinPath(local.path, name, isWin)).catch((e) => setUpdateStatus(String(e)));
+            await ipc.localMkdir(joinPath(local.path, name, isWin)).catch((e) => setUpdateStatus(translateError(String(e))));
             void loadLocal(local.path);
           }}
           onCancel={() => setPrompt(null)}
@@ -381,7 +398,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
                 void loadLocal(local?.path ?? "");
               }
             } catch (e) {
-              setUpdateStatus(String(e));
+              setUpdateStatus(translateError(String(e)));
             }
           }}
           onCancel={() => setPrompt(null)}
@@ -396,7 +413,7 @@ export function SftpPane({ tab }: { tab: Tab }) {
             if (!tab.sftpId) return;
             const mode = parseInt(value, 8);
             if (Number.isNaN(mode)) return;
-            await ipc.sftpChmod(tab.sftpId, prompt.entry.path, mode).catch((e) => setUpdateStatus(String(e)));
+            await ipc.sftpChmod(tab.sftpId, prompt.entry.path, mode).catch((e) => setUpdateStatus(translateError(String(e))));
             void loadRemote(remote?.path ?? ".");
           }}
           onCancel={() => setPrompt(null)}
